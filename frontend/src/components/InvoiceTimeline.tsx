@@ -31,9 +31,9 @@ export default function InvoiceTimeline({ invoice }: { invoice: Invoice }) {
     {
       label: invoice.due_date
         ? overdue
-          ? "Due date — overdue"
+          ? "Overdue"
           : "Due date"
-        : "Due date — none set",
+        : "No due date set",
       date: invoice.due_date,
       done: paid,
       note: paid
@@ -48,7 +48,7 @@ export default function InvoiceTimeline({ invoice }: { invoice: Invoice }) {
       label: external
         ? "Paid externally (unverified)"
         : paid
-          ? "Paid — held in escrow"
+          ? "Paid, held in escrow"
           : "Paid",
       date: invoice.paid_at,
       done: paid,
@@ -71,14 +71,14 @@ export default function InvoiceTimeline({ invoice }: { invoice: Invoice }) {
       date: null,
       done: refunded || released || cancelled,
       note: cancelled
-        ? "Cancelled while pending — no funds moved."
+        ? "Cancelled while pending. No funds moved."
         : invoice.disputed
-          ? `Dispute open${invoice.dispute_reason ? `: “${invoice.dispute_reason}”` : ""} — release is blocked until it is withdrawn or the seller refunds.`
+          ? `Dispute open${invoice.dispute_reason ? `: “${invoice.dispute_reason}”` : ""}. Release is blocked until it is withdrawn or the seller refunds.`
           : refunded
             ? "Funds returned to the client."
             : released
               ? "Funds released to the seller."
-              : "The seller releases the escrowed funds — or refunds the client.",
+              : "The seller releases the escrowed funds, or refunds the client.",
     },
   ];
 

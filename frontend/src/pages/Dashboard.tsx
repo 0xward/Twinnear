@@ -136,7 +136,7 @@ export default function Dashboard() {
         <h1>The ledger</h1>
         <p className="muted">
           What you have received, what is held in escrow, and what is still
-          owed to you — at a glance.
+          owed to you, at a glance.
         </p>
       </div>
 
@@ -160,7 +160,7 @@ export default function Dashboard() {
             {formatNear(externalYocto.toString())} Ⓝ
           </div>
           <div className="label" style={{ marginTop: 2 }}>
-            1Click attestations, not verified on-chain
+            1Click payments confirmed by the seller, not checked on-chain
           </div>
         </div>
         <div className="stat">
@@ -215,7 +215,7 @@ export default function Dashboard() {
         </div>
       </div>
       <p className="muted" style={{ marginTop: -8, marginBottom: 18 }}>
-        Fiat amounts are estimates only — not the settlement rate.
+        Fiat amounts are rough estimates, not the rate you will be paid at.
       </p>
 
       {error && <div className="error" role="alert">{error}</div>}
@@ -235,7 +235,7 @@ export default function Dashboard() {
               §
             </div>
             <p className="muted">
-              No invoices yet — the ledger is blank.{" "}
+              No invoices yet. The ledger is blank.{" "}
               <Link to="/invoices/new">Create the first one</Link>.
             </p>
           </div>

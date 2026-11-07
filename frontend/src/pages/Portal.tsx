@@ -27,7 +27,7 @@ export function clientStatusLabel(inv: Invoice): string {
     return "Paid via external payment";
   }
   if (inv.status === "Paid" && inv.released) return "Paid";
-  if (inv.status === "Paid") return "Paid — held securely";
+  if (inv.status === "Paid") return "Paid, held securely";
   return "Awaiting your payment";
 }
 
@@ -87,8 +87,8 @@ export default function Portal() {
     <div className="card">
       <h2>Client portal</h2>
       <p className="sub">
-        Your invoices from Twinnear sellers — nothing else, no jargon.
-        Connect your wallet to see what you owe and what you have paid.
+        Invoices billed to you by Twinnear sellers. Connect your wallet
+        to see what you owe and what you have paid.
       </p>
 
       {error && <div className="error" role="alert">{error}</div>}
@@ -221,9 +221,9 @@ export default function Portal() {
             </>
           )}
           <p className="muted" style={{ marginTop: 14 }}>
-            “Paid — held securely” means your payment is with the contract
+            “Paid, held securely” means your payment sits with the contract
             until the seller confirms the work is done. Fiat amounts are
-            estimates only — not the settlement rate.
+            rough estimates, not the rate you will be paid at.
           </p>
         </>
       )}

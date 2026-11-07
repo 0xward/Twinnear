@@ -18,8 +18,8 @@ export function invoiceRef(inv: {
 ): string {
   const what = description ? ` for ${description}` : "";
   return (
-    `Invoice ${ref} — ${amountNear} NEAR${what}.\n` +
+    `Invoice ${ref}: ${amountNear} NEAR${what}.\n` +
     `You can pay it here: ${payUrl}\n` +
-    `Thank you! — Twinnear`
+    `Thank you! Twinnear`
   );
 }

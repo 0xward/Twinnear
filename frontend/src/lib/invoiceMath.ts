@@ -66,7 +66,7 @@ export function parseLineItemDraft(
   }
   if (descBytes > 200) {
     return {
-      error: `Row ${rowNo}: description is ${descBytes} bytes — the contract allows at most 200 bytes per line item.`,
+      error: `Row ${rowNo}: description is ${descBytes} bytes. The contract allows at most 200 bytes per line item.`,
     };
   }
   if (!/^\d+$/.test(d.quantity.trim())) {

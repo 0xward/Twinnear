@@ -57,7 +57,7 @@ export default function Invoices() {
         <h2>Invoices</h2>
         <p className="sub">
           Every invoice on the contract, oldest first. Share a pay link with
-          your client — they pay, funds sit in escrow, you release or refund.
+          your client. They pay, funds sit in escrow, you release or refund.
           {total > 0 && ` Showing ${shown.length} of ${total}.`}
         </p>
       </div>

@@ -53,7 +53,7 @@ export class RelayerNotConfiguredError extends Error {
     super(
       "No gasless relayer is configured (VITE_RELAYER_URL is unset). " +
         "Run the reference server in relayer-server/ and set " +
-        "VITE_RELAYER_URL, or create the invoice directly — on testnet " +
+        "VITE_RELAYER_URL, or create the invoice directly. On testnet " +
         "the gas is a fraction of a cent.",
     );
     this.name = "RelayerNotConfiguredError";
@@ -141,7 +141,7 @@ export async function signMetaPayload(
   if (!signed) {
     throw new Error(
       "Wallet did not return a signature for the meta-transaction message. " +
-        "This wallet may not support NEP-413 message signing — try Meteor Wallet.",
+        "This wallet may not support NEP-413 message signing. Try Meteor Wallet.",
     );
   }
   return { payload, signature: signed.signature, publicKey: signed.publicKey };
@@ -164,7 +164,7 @@ export interface SubmitMetaParams {
 export class RelayerDuplicateError extends Error {
   constructor() {
     super(
-      "The relayer already created this invoice (same replay counter) — " +
+      "The relayer already created this invoice (same replay counter). " +
         "refresh the invoice list instead of submitting again.",
     );
     this.name = "RelayerDuplicateError";

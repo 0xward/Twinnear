@@ -99,7 +99,7 @@ export function assertMainnetRecipient(recipient: string): void {
       "1Click is mainnet-only: recipient " +
         recipient +
         " is a testnet account, which the 1Click API rejects " +
-        "(verified 2026-11-06 — quotes to .testnet recipients fail). " +
+        "(verified 2026-11-06: quotes to .testnet recipients fail). " +
         "Use a mainnet account to get a live quote.",
     );
   }

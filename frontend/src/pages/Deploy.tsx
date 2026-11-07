@@ -132,12 +132,12 @@ export default function Deploy() {
   /** Shared pre-flight checks for both deploy buttons. */
   function preflight(): string | null {
     if (!account) {
-      return "Connect your wallet first — the button is at the top.";
+      return "Connect your wallet first. The button is at the top.";
     }
     if (account !== CONTRACT_ID) {
       return (
         `You are signed in as ${account}. Deploying to ${CONTRACT_ID} ` +
-        `needs that exact account — switch wallets and try again.`
+        `needs that exact account. Switch wallets and try again.`
       );
     }
     if (!code) {
@@ -174,7 +174,7 @@ export default function Deploy() {
       const hash = res?.transaction?.hash ?? null;
       setTxHash(hash);
       setDone(
-        "Deploy transaction submitted — confirm it in your wallet, wait a few seconds, then press Verify below. Do not deploy twice.",
+        "Deploy transaction submitted. Confirm it in your wallet, wait a few seconds, then press Verify below. Do not deploy twice.",
       );
       // M-06: no automatic re-check — the transaction is not final
       // yet, and an early check would show a scary getOwner() error.
@@ -202,9 +202,9 @@ export default function Deploy() {
       const hash = res?.transaction?.hash ?? null;
       setTxHash(hash);
       setDone(
-        "New code submitted (DeployContract only — no init, state is untouched). " +
+        "New code submitted (DeployContract only. No init, so the state is untouched). " +
           "Now run the owner-only `migrate` from the CLI (see the commands below), " +
-          "then press Verify — get_version must read 2.",
+          "then press Verify. get_version must read 2.",
       );
       // M-06: no automatic re-check — the transaction is not final yet.
     } catch (err) {
@@ -225,8 +225,8 @@ export default function Deploy() {
       <div className="error" role="alert">
         <strong>Browser deploy via Meteor is BLOCKED.</strong> Meteor
         Wallet refuses the DeployContract action (“Contract deployment
-        blocked”). Recommended: near-cli-rs from a computer or Termux —
-        see DEPLOY.md Path B. The form below stays for other wallets, or
+        blocked”). Recommended: near-cli-rs from a computer or Termux.
+        See DEPLOY.md Path B. The form below stays for other wallets, or
         if Meteor changes its policy.
       </div>
 
@@ -238,7 +238,7 @@ export default function Deploy() {
           {deployed === null
             ? "Checking…"
             : deployed
-              ? `Deployed${owner ? ` — owner ${owner}` : ""}${version !== null ? ` — schema v${version}` : ""}`
+              ? `Deployed${owner ? ` · owner ${owner}` : ""}${version !== null ? ` · schema v${version}` : ""}`
               : "Not deployed yet"}
         </dd>
         <dt>Signed in as</dt>
@@ -263,7 +263,7 @@ export default function Deploy() {
           </span>
         </li>
         <li className={deployed === true ? "done" : ""}>
-          Deploy + initialize (first deploy only — one transaction)
+          Deploy + initialize (first deploy only, one transaction)
           <span className="step-note">
             {deployed === true ? "done" : "waiting"}
           </span>
@@ -318,7 +318,7 @@ export default function Deploy() {
         <div className="error" role="alert" style={{ marginTop: 12 }}>
           Warning: this file&apos;s SHA-256 does not match the current
           build ({EXPECTED_WASM_SHA256.slice(0, 12)}…). It may be stale
-          or built from different source — deploy only if you built it
+          or built from different source. Deploy only if you built it
           yourself on purpose. (The expected hash is updated by the
           coordinator when a new contract build lands.)
         </div>
@@ -339,7 +339,7 @@ export default function Deploy() {
             </button>
           </div>
           <p className="muted" style={{ marginTop: 14 }}>
-            First deploy only: one transaction with two actions —
+            First deploy only: one transaction with two actions.
             DeployContract, then init <code>new</code> with owner{" "}
             <code>{CONTRACT_ID}</code>. The wallet must hold the
             full-access key of {CONTRACT_ID} (created in Meteor).
@@ -354,8 +354,8 @@ export default function Deploy() {
           <h3 style={{ margin: "18px 0 4px" }}>Redeploy (upgrade)</h3>
           <p className="sub">
             The contract is already live. To upgrade it: deploy the new
-            wasm <em>without</em> initializing — the existing state and
-            owner survive — then run the owner-only <code>migrate</code>{" "}
+            wasm <em>without</em> initializing. The existing state and
+            owner survive. Then run the owner-only <code>migrate</code>{" "}
             from the CLI. <strong>Never call <code>new</code> again</strong>{" "}
             after a redeploy: it would wipe the ledger.
           </p>

@@ -36,9 +36,8 @@ export default function App() {
     <div className="sheet">
       <header className="masthead">
         <Link className="brand" to="/">
-          <img className="brand-mark" src="/logo.svg" alt="" />
+          <img className="brand-mark" src="/logo.svg" alt="Twinnear" />
           <span>
-            Twinnear
             <small>Freelancer invoicing on NEAR</small>
           </span>
         </Link>
@@ -60,8 +59,7 @@ export default function App() {
       {deployed === false && (
         <div className="notice" aria-live="polite">
           <strong>Contract not deployed yet.</strong> The Twinnear contract (
-          <code>{CONTRACT_ID}</code>) is not deployed on testnet yet. Follow
-          README “Deploy the contract” first — the pages below will work once
+          <code>{CONTRACT_ID}</code>) is not deployed on testnet yet. Follow README “Deploy the contract” first. The pages below will work once
           it is deployed.
         </div>
       )}
@@ -91,8 +89,8 @@ export default function App() {
       </Suspense>
 
       <footer className="footer">
-        Twinnear — a port of TwinPayAI (Stacks) to NEAR; only the NEAR
-        integration is new. Testnet only. No AI.{" "}
+        Twinnear is a port of TwinPayAI (Stacks) to NEAR. Only the NEAR
+        integration is new. Testnet only.{" "}
         <Link to="/">Ledger</Link> ·{" "}
         <a
           href="https://github.com/0xward/Twinnear"

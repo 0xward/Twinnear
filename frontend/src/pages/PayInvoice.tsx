@@ -108,7 +108,7 @@ export default function PayInvoice() {
       const hash = extractTxHash(res);
       setTxHash(hash);
       setDone(
-        `${label} submitted — confirm it in your wallet, then press "Refresh status" below to see the result.`,
+        `${label} submitted. Confirm it in your wallet, then press "Refresh status" below to see the result.`,
       );
     } catch (e) {
       setError(friendlyError(e));
@@ -157,7 +157,7 @@ export default function PayInvoice() {
     try {
       if (!/^0x[0-9a-fA-F]{40}$/.test(refundTo.trim())) {
         throw new Error(
-          "Enter your refund address on the origin chain — a 0x address with 40 hex characters.",
+          "Enter your refund address on the origin chain. A 0x address with 40 hex characters.",
         );
       }
       const q = await quoteIntentSettlement({
@@ -288,7 +288,7 @@ export default function PayInvoice() {
         {isClient && invoice.status === "Pending" && (
           <p className="sub" style={{ marginTop: 8 }}>
             This invoice is from {invoice.seller}. Pay the exact amount
-            below — {isUsdc
+            below. {isUsdc
               ? "your payment goes straight to the seller via 1Click."
               : "your payment is held safely by the contract until the seller releases it, or refunds you."}
           </p>
@@ -411,7 +411,7 @@ export default function PayInvoice() {
           amountSmallestUnit={invoice.amount}
           currency={invoice.currency}
         />{" "}
-        Estimate only — not the settlement rate.
+        Estimate only, not the settlement rate.
       </p>
 
       <hr className="rule" />
@@ -453,8 +453,8 @@ export default function PayInvoice() {
         )}
         {invoice.status === "Pending" && isClient && isUsdc && (
           <p className="muted" style={{ margin: 0 }}>
-            This is a USDC invoice — it settles via 1Click straight to
-            the seller (no escrow). Use the 1Click payment below; the
+            This is a USDC invoice. It settles via 1Click straight to
+            the seller (no escrow). Use the 1Click payment below. The
             escrow button does not apply here because the contract
             cannot hold USDC.
           </p>
@@ -524,7 +524,7 @@ export default function PayInvoice() {
           {!invoice.disputed ? (
             <>
               <p className="sub">
-                If the work was not delivered, open a dispute — it blocks
+                If the work was not delivered, open a dispute. It blocks
                 the seller from releasing the escrow until you withdraw it
                 or the seller refunds you.
               </p>
@@ -558,16 +558,16 @@ export default function PayInvoice() {
               </div>
               {!pastDue && invoice.due_date !== null && (
                 <p className="muted" style={{ marginTop: 10 }}>
-                  The due date has not passed yet — you can claim the refund
+                  The due date has not passed yet. You can claim the refund
                   yourself after {formatDate(invoice.due_date)} if the seller
                   stays silent. Until then, a dispute blocks the release.
                 </p>
               )}
               {!pastDue && invoice.due_date === null && (
                 <p className="muted" style={{ marginTop: 10 }}>
-                  This invoice has no due date, so there is no claim-refund
-                  escape — a dispute is your only lever, plus asking the
-                  seller for a refund.
+                  This invoice has no due date, so you cannot claim a refund
+                  after a deadline. A dispute is your only protection,
+                  besides asking the seller for a refund.
                 </p>
               )}
             </>
@@ -607,12 +607,12 @@ export default function PayInvoice() {
         <PayQr url={shareUrl} />
         <div style={{ flex: "1 1 260px", minWidth: 0 }}>
           <p className="muted" style={{ margin: "0 0 4px" }}>
-            Pay link — share it with the client by email or chat:
+            Pay link. Share it with the client by email or chat:
           </p>
           <p className="share-link">{shareUrl}</p>
           <p className="muted" style={{ margin: "10px 0 0" }}>
             “Copy reminder” gives you a short message with the invoice
-            number, amount, and this link — ready to paste.
+            number, amount, and this link, ready to paste.
           </p>
         </div>
       </div>
@@ -622,8 +622,8 @@ export default function PayInvoice() {
           <hr className="rule" />
           <h3 style={{ margin: "0 0 4px" }}>
             {isUsdc
-              ? "Pay via 1Click — USDC"
-              : "Pay from another chain — 1Click"}
+              ? "Pay via 1Click: USDC"
+              : "Pay from another chain: 1Click"}
           </h3>
           {oneClickBlocked ? (
             <p className="sub">
@@ -631,21 +631,21 @@ export default function PayInvoice() {
               seller ({invoice.seller}) is a testnet account, which the
               1Click API rejects.{" "}
               {isUsdc
-                ? "On testnet, a USDC invoice cannot be paid through escrow either — the flow is shown here with the existing external-payment confirmation: once the payment reaches the seller off-chain, the seller closes the invoice below."
+                ? "On testnet, a USDC invoice cannot be paid through escrow either. The flow is shown here with the existing external-payment confirmation: once the payment reaches the seller off-chain, the seller closes the invoice below."
                 : "On testnet, pay in NEAR directly with the button above."}
             </p>
           ) : (
             <>
               <p className="sub">
                 {isUsdc
-                  ? `This is a USDC invoice — 1Click is the way to pay it. Pay with ${sourceLabel} from your wallet on the origin chain; 1Click delivers exactly ${formatInvoiceAmount(invoice)} to the seller, straight to their account (no escrow).`
+                  ? `This is a USDC invoice. 1Click is the way to pay it. Pay with ${sourceLabel} from your wallet on the origin chain; 1Click delivers exactly ${formatInvoiceAmount(invoice)} to the seller, straight to their account (no escrow).`
                   : `Pay with ${sourceLabel} from your wallet on the origin chain. 1Click delivers exactly ${formatNear(invoice.amount)} wNEAR to the seller.`}
                 {quote && quote.depositAddress
-                  ? ` Send ${quote.amountInFormatted} to the deposit address below — the swap starts on receipt.`
+                  ? ` Send ${quote.amountInFormatted} to the deposit address below. The swap starts on receipt.`
                   : ""}
               </p>
               <p className="muted">
-                A dry quote is a price preview only — the live price can move
+                A dry quote is a price preview only. The live price can move
                 before you reserve the deposit address.
               </p>
               <p className="muted">{MAINNET_ONLY_NOTE}</p>
@@ -725,7 +725,7 @@ export default function PayInvoice() {
                   </button>
                   {swapStatus?.status === "SUCCESS" && (
                     <span className="muted">
-                      Settlement received — ask the seller to confirm it below.
+                      Settlement received. Ask the seller to confirm it below.
                     </span>
                   )}
                 </div>
@@ -741,8 +741,8 @@ export default function PayInvoice() {
           <h3 style={{ margin: "0 0 4px" }}>Confirm external payment</h3>
           <p className="sub">
             {isUsdc
-              ? "If the client paid via 1Click and the USDC landed in your account, close the invoice here. This records the 1Click deposit address as proof and marks the invoice Paid. Only you (the seller) can do this. This is your own attestation — nothing on-chain verifies the payment."
-              : "If the client paid from another chain via 1Click and the wNEAR landed in your account, close the invoice here. This records the 1Click deposit address as proof and marks the invoice Paid. Only you (the seller) can do this. This is your own attestation — nothing on-chain verifies the payment."}
+              ? "If the client paid via 1Click and the USDC landed in your account, close the invoice here. This records the 1Click deposit address as proof and marks the invoice Paid. Only you (the seller) can do this. This is your own attestation. Nothing on-chain verifies the payment."
+              : "If the client paid from another chain via 1Click and the wNEAR landed in your account, close the invoice here. This records the 1Click deposit address as proof and marks the invoice Paid. Only you (the seller) can do this. This is your own attestation. Nothing on-chain verifies the payment."}
           </p>
           <label htmlFor="extRef">1Click deposit address / tx reference</label>
           <input

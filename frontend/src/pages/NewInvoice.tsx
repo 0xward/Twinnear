@@ -137,8 +137,8 @@ export default function NewInvoice() {
     currency === "Near" && !itemized && taxBps === 0;
   const gaslessBlockedReason = !gaslessAvailable
     ? currency === "Usdc"
-      ? "Gasless creation is only available for single-line NEAR invoices — USDC invoices are created directly."
-      : "Gasless creation is only available for single-line NEAR invoices without tax — itemized or taxed invoices are created directly."
+      ? "Gasless creation is only available for single-line NEAR invoices. USDC invoices are created directly."
+      : "Gasless creation is only available for single-line NEAR invoices without tax. Itemized or taxed invoices are created directly."
     : null;
 
   useEffect(() => {
@@ -169,7 +169,7 @@ export default function NewInvoice() {
     setTxHash(hash);
     setCreatedInvoiceId(invoiceId);
     setDone(
-      "Invoice created — confirm it in your wallet, then press " +
+      "Invoice created. Confirm it in your wallet, then press " +
         '"Refresh status" below to see it. Do not create it twice.',
     );
     setClient("");
@@ -188,7 +188,7 @@ export default function NewInvoice() {
     try {
       const account = await getSignedInAccount();
       if (!account) {
-        setError("Connect your wallet first — the button is at the top.");
+        setError("Connect your wallet first. The button is at the top.");
         return;
       }
       const count = await getOpenInvoiceCount(account).catch(() => null);
@@ -225,17 +225,17 @@ export default function NewInvoice() {
     }
     if (!isAccountForNetwork(clientTrimmed)) {
       throw new Error(
-        `On testnet the client must be a .testnet account — "${clientTrimmed}" cannot transact here.`,
+        `On testnet the client must be a .testnet account. "${clientTrimmed}" cannot transact here.`,
       );
     }
     if (clientTrimmed === account) {
       throw new Error(
-        "You cannot invoice yourself — the client must be someone else.",
+        "You cannot invoice yourself. The client must be someone else.",
       );
     }
     if (descriptionTooLong) {
       throw new Error(
-        `Description is ${descriptionBytes} bytes — the contract allows at most 500 bytes.`,
+        `Description is ${descriptionBytes} bytes. The contract allows at most 500 bytes.`,
       );
     }
     if (itemized) {
@@ -284,7 +284,7 @@ export default function NewInvoice() {
   async function submitDirect() {
     const account = await getSignedInAccount();
     if (!account) {
-      throw new Error("Connect your wallet first — the button is at the top.");
+      throw new Error("Connect your wallet first. The button is at the top.");
     }
     const args = buildCreateArgs(account);
     return createInvoice(
@@ -307,7 +307,7 @@ export default function NewInvoice() {
     setRelayerFailed(false);
     const account = await getSignedInAccount();
     if (!account) {
-      setError("Connect your wallet first — the button is at the top.");
+      setError("Connect your wallet first. The button is at the top.");
       return;
     }
     setBusy(true);
@@ -316,7 +316,7 @@ export default function NewInvoice() {
       const args = buildCreateArgs(account);
       if (!(await accountExists(args.clientTrimmed))) {
         throw new Error(
-          `Client account ${args.clientTrimmed} does not exist on testnet — check the spelling.`,
+          `Client account ${args.clientTrimmed} does not exist on testnet. Check the spelling.`,
         );
       }
       if (gasless && gaslessAvailable) {
@@ -368,7 +368,7 @@ export default function NewInvoice() {
     setRelayerFailed(false);
     const account = await getSignedInAccount();
     if (!account) {
-      setError("Connect your wallet first — the button is at the top.");
+      setError("Connect your wallet first. The button is at the top.");
       return;
     }
     setBusy(true);
@@ -399,7 +399,7 @@ export default function NewInvoice() {
       <h2>New invoice</h2>
       <p className="sub">
         You are the seller. The client pays the exact amount; NEAR funds
-        are held in escrow by the contract until you release them — or
+        are held in escrow by the contract until you release them or
         refund them. USDC invoices settle straight to you via 1Click,
         with no escrow.
       </p>
@@ -446,7 +446,7 @@ export default function NewInvoice() {
       )}
       {relayerFailed && (
         <div className="notice" aria-live="polite">
-          The gasless relayer failed — you can still create this invoice
+          The gasless relayer failed. You can still create this invoice
           directly (you pay your own testnet gas, a fraction of a cent).{" "}
           <button
             type="button"
@@ -484,7 +484,7 @@ export default function NewInvoice() {
               checked={currency === "Near"}
               onChange={() => setCurrency("Near")}
             />
-            NEAR — escrow
+            NEAR · escrow
           </label>
           <label className={currency === "Usdc" ? "seg active" : "seg"}>
             <input
@@ -494,13 +494,13 @@ export default function NewInvoice() {
               checked={currency === "Usdc"}
               onChange={() => setCurrency("Usdc")}
             />
-            USDC — via 1Click
+            USDC · via 1Click
           </label>
         </fieldset>
         {currency === "Usdc" ? (
           <p className="muted" style={{ marginTop: 8 }}>
             USDC invoices settle via 1Click to the seller (no escrow, no
-            spend-guard amount cap). 1Click has no testnet — on testnet
+            spend-guard amount cap). 1Click has no testnet. On testnet
             the flow is shown with the existing external-payment
             confirmation.
           </p>
@@ -547,7 +547,7 @@ export default function NewInvoice() {
                     onChange={(e) =>
                       setRow(i, { description: e.target.value })
                     }
-                    placeholder="Design work — landing page"
+                    placeholder="Design work, landing page"
                     aria-label={`Line item ${i + 1} description`}
                     autoComplete="off"
                   />
@@ -612,7 +612,7 @@ export default function NewInvoice() {
             />
             <p className="muted" id="tax-note" style={{ marginTop: 6 }}>
               0–100%. Tax = subtotal × rate, rounded down to the smallest
-              unit — the same math the contract enforces on-chain.
+              unit. Same math the contract enforces on-chain.
             </p>
             {taxBps === null && (
               <div className="error" role="alert">
@@ -641,7 +641,7 @@ export default function NewInvoice() {
               }}
               style={{ width: "auto", marginRight: 8 }}
             />
-            Itemized invoice — line items + tax instead of one amount.
+            Itemized invoice: line items + tax instead of one amount.
           </label>
         </p>
 
@@ -650,7 +650,7 @@ export default function NewInvoice() {
           id="description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Design work — landing page, October"
+          placeholder="Design work, landing page, October"
           aria-describedby="description-count"
         />
         <p
@@ -660,7 +660,7 @@ export default function NewInvoice() {
         >
           {descriptionBytes} / 500 bytes
           {descriptionTooLong
-            ? " — too long; shorten it before creating the invoice."
+            ? ". Too long; shorten it before creating the invoice."
             : ""}
         </p>
         <label htmlFor="dueDays">Payment deadline</label>
@@ -682,7 +682,7 @@ export default function NewInvoice() {
         )}
         <p className="muted" style={{ marginTop: 12 }}>
           Creating this invoice locks a {STORAGE_DEPOSIT_NEAR} NEAR storage
-          deposit — one-time, non-refundable; it pays for the ledger entry.
+          deposit. One-time, non-refundable. It pays for the ledger entry.
           Escrowed funds are separate: the client pays the invoice amount,
           and it returns to the client on refund.
         </p>
@@ -705,7 +705,7 @@ export default function NewInvoice() {
                   onChange={(e) => setGasless(e.target.checked)}
                   style={{ width: "auto", marginRight: 8 }}
                 />
-                Create gaslessly — a relayer submits this for you (you only
+                Create gaslessly: a relayer submits this for you (you only
                 sign a message, no gas).
               </label>
             </p>
@@ -717,7 +717,7 @@ export default function NewInvoice() {
         ) : (
           <p className="muted" style={{ marginTop: 12 }}>
             Gasless relay is not configured (no relayer server at
-            VITE_RELAYER_URL) — you pay your own testnet gas, which is a
+            VITE_RELAYER_URL). You pay your own testnet gas, which is a
             fraction of a cent. See relayer-server/ to run one.
           </p>
         )}
@@ -726,7 +726,7 @@ export default function NewInvoice() {
       {(client.trim() || amount.trim() || description.trim() || itemized) && (
         <div className="preview" aria-live="polite">
           <div className="label" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-faint)", fontWeight: 600 }}>
-            Preview — how the client will see it
+            Preview: how the client will see it
           </div>
           <div className="preview-amount">
             {previewTotal}
@@ -766,7 +766,7 @@ export default function NewInvoice() {
                 amountSmallestUnit={computedTotalSmallest}
                 currency={currency}
               />{" "}
-              Estimate only — not the settlement rate.
+              Estimate only, not the settlement rate.
             </p>
           )}
         </div>
@@ -777,7 +777,7 @@ export default function NewInvoice() {
         it breaks that policy. USDC invoices skip the amount and daily
         caps (different units) but the seller allowlist still applies.
         Multi-chain settlement via 1Click/Intents lives on the pay page
-        (mainnet only — 1Click has no testnet); gasless creation via the
+        (mainnet only; 1Click has no testnet). Gasless creation via the
         relayer is available above when configured.
       </p>
     </div>

@@ -76,7 +76,7 @@ export default function PolicyPage() {
     setDone(null);
     setTxHash(null);
     if (!account) {
-      setError("Connect your wallet first — the button is at the top.");
+      setError("Connect your wallet first. The button is at the top.");
       return;
     }
     const value = maxAmount.trim();
@@ -108,7 +108,7 @@ export default function PolicyPage() {
       }
       if (!isAccountForNetwork(s)) {
         setError(
-          `"${s}" is not a testnet account — on testnet, sellers must end in .testnet.`,
+          `"${s}" is not a testnet account. On testnet, sellers must end in .testnet.`,
         );
         return;
       }
@@ -120,7 +120,7 @@ export default function PolicyPage() {
       const res = await setPolicy(value, deduped, daily);
       setTxHash(extractTxHash(res));
       setDone(
-        "Policy submitted — confirm it in your wallet, then press \"Refresh\" below to see the result.",
+        "Policy submitted. Confirm it in your wallet, then press \"Refresh\" below to see the result.",
       );
     } catch (err) {
       setError(friendlyError(err));
@@ -203,7 +203,7 @@ export default function PolicyPage() {
       <h2>Spend guard</h2>
       <p className="sub">
         Rules you set for yourself. Any invoice that breaks them is rejected
-        on-chain — no AI, no judgement calls, just the rules below.
+        on-chain. No judgement calls, just the rules below.
       </p>
 
       {account ? (
@@ -259,13 +259,13 @@ export default function PolicyPage() {
 
       <div className="notice" style={{ marginTop: 18 }} aria-live="polite">
         <strong>How this guard works.</strong> The rules are checked when
-        an invoice is <em>created</em> AND again when you <em>pay</em> — an
+        an invoice is <em>created</em> AND again when you <em>pay</em>. An
         invoice created before you set a policy can no longer be paid once
         it breaks your current rules. A daily total cap also applies to
         escrow payments (it resets at midnight UTC; editing these settings
         never resets today&apos;s spent amount). Payments from another
         chain via 1Click are <em>not</em> covered: the contract never sees
-        that money, so it cannot enforce a limit on it — and external
+        that money, so it cannot enforce a limit on it. External
         payments do not count toward your daily cap either.
       </div>
 
@@ -325,7 +325,7 @@ export default function PolicyPage() {
         </div>
       </form>
       <p className="muted" style={{ marginTop: 14 }}>
-        “Clear rules” empties all three fields — saving then removes your
+        “Clear rules” empties all three fields. Saving then removes your
         limit, daily cap, and allowlist entirely.
       </p>
       </div>

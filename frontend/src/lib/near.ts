@@ -554,7 +554,7 @@ function parseOptionalNear(value: string, label: string): string {
   const parsed = parseNearAmount(v);
   if (!parsed) {
     throw new Error(
-      `${label} "${value}" is not a plain decimal amount — use a number like 1.5 (no exponents, at most 24 decimal places).`,
+      `${label} "${value}" is not a plain decimal amount. Use a number like 1.5 (no exponents, at most 24 decimal places).`,
     );
   }
   return parsed;

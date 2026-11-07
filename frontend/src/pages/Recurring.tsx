@@ -130,7 +130,7 @@ export default function Recurring() {
     }
     if (!isValidAccountId(clientTrimmed) || !isAccountForNetwork(clientTrimmed)) {
       setError(
-        `"${clientTrimmed}" is not a valid testnet client account — use a .testnet account.`,
+        `"${clientTrimmed}" is not a valid testnet client account. Use a .testnet account.`,
       );
       return;
     }
@@ -201,12 +201,12 @@ export default function Recurring() {
     setResults([]);
     const account = await getSignedInAccount();
     if (!account) {
-      setError("Connect your wallet first — the button is at the top.");
+      setError("Connect your wallet first. The button is at the top.");
       return;
     }
     const due = templates.filter((t) => isDue(t));
     if (due.length === 0) {
-      setDone("Nothing is due — no active retainer has reached its date.");
+      setDone("Nothing is due. No active retainer has reached its date.");
       return;
     }
     setBusy(true);
@@ -218,7 +218,7 @@ export default function Recurring() {
           const res = await createInvoice(
             template.client,
             template.totalSmallestUnit,
-            `${template.name} — ${formatIsoDate(template.nextDue)}`,
+            `${template.name} · ${formatIsoDate(template.nextDue)}`,
             null,
             template.currency,
             template.items,
@@ -263,7 +263,7 @@ export default function Recurring() {
       const made = out.filter((r) => r.ok).length;
       if (made > 0) {
         setDone(
-          `Generated ${made} invoice${made === 1 ? "" : "s"} — confirm each one in your wallet, then check the ledger.`,
+          `Generated ${made} invoice${made === 1 ? "" : "s"}. Confirm each one in your wallet, then check the ledger.`,
         );
       }
     } finally {
@@ -282,7 +282,7 @@ export default function Recurring() {
           Recurring invoices, kept in this browser only. A retainer is a
           template: when its date arrives, press “Generate due invoices”
           and the invoice is created on-chain. There is no cron and no
-          background job — nothing is created until you press the button.
+          background job. Nothing is created until you press the button.
           Each due invoice is one transaction, so your wallet asks you
           to confirm each one.
         </p>
@@ -314,11 +314,11 @@ export default function Recurring() {
               <li key={i} className={r.ok ? "done" : "next"}>
                 <span className="dot" aria-hidden="true" />
                 <span className="tl-label">
-                  {r.templateName} —{" "}
+                  {r.templateName}:{" "}
                   {r.ok
                     ? r.invoiceId !== null
                       ? `invoice #${r.invoiceId} created`
-                      : "invoice created (id unknown — check the ledger)"
+                      : "invoice created (id unknown; check the ledger)"
                     : `failed: ${r.error}`}
                 </span>
                 {r.ok && r.txHash && (
@@ -350,7 +350,7 @@ export default function Recurring() {
               §
             </div>
             <p className="muted">
-              No retainers yet — create the first one below.
+              No retainers yet. Create the first one below.
             </p>
           </div>
         ) : (
@@ -472,7 +472,7 @@ export default function Recurring() {
                 checked={currency === "Near"}
                 onChange={() => setCurrency("Near")}
               />
-              NEAR — escrow
+              NEAR · escrow
             </label>
             <label className={currency === "Usdc" ? "seg active" : "seg"}>
               <input
@@ -482,7 +482,7 @@ export default function Recurring() {
                 checked={currency === "Usdc"}
                 onChange={() => setCurrency("Usdc")}
               />
-              USDC — via 1Click
+              USDC · via 1Click
             </label>
           </fieldset>
 
@@ -505,7 +505,7 @@ export default function Recurring() {
                 <input
                   value={row.description}
                   onChange={(e) => setRow(i, { description: e.target.value })}
-                  placeholder="Design work — retainer"
+                  placeholder="Design work, retainer"
                   aria-label={`Line item ${i + 1} description`}
                   autoComplete="off"
                 />
