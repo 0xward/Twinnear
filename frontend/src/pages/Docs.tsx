@@ -180,7 +180,7 @@ export default function Docs() {
           of it as a personal rulebook, not a settings page.
         </p>
         <p>
-          Open <Link to="/settings">Spend guard</Link> and set your
+          Open <Link to="/spend-guard">Spend guard</Link> and set your
           rules. Three examples:
         </p>
         <ul className="plain-list">

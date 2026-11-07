@@ -73,6 +73,11 @@ export default function NewInvoice() {
   // ---- F2: line items + tax ----
   const [itemized, setItemized] = useState(false);
   const [rows, setRows] = useState<LineItemDraft[]>([{ ...EMPTY_ROW }]);
+  // Line-item errors only show once the user has touched a row (or
+  // tried to submit): the first row starts with quantity "1"
+  // prefilled, so it is not "empty" and would otherwise error on
+  // first load.
+  const [rowsTouched, setRowsTouched] = useState(false);
   const [taxPct, setTaxPct] = useState("");
 
   const parseUnitPrice =
@@ -176,6 +181,7 @@ export default function NewInvoice() {
     setAmount("");
     setDescription("");
     setRows([{ ...EMPTY_ROW }]);
+    setRowsTouched(false);
     setTaxPct("");
   }
 
@@ -383,6 +389,7 @@ export default function NewInvoice() {
   }
 
   function setRow(i: number, patch: Partial<LineItemDraft>) {
+    setRowsTouched(true);
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
 
@@ -570,13 +577,14 @@ export default function NewInvoice() {
                   <button
                     type="button"
                     className="btn btn-ghost btn-small"
-                    onClick={() =>
+                    onClick={() => {
+                      setRowsTouched(true);
                       setRows((prev) =>
                         prev.length > 1
                           ? prev.filter((_, j) => j !== i)
                           : [{ ...EMPTY_ROW }],
-                      )
-                    }
+                      );
+                    }}
                     disabled={rows.length === 1 && draftIsEmpty(row)}
                     aria-label={`Remove line item ${i + 1}`}
                   >
@@ -589,13 +597,16 @@ export default function NewInvoice() {
               <button
                 type="button"
                 className="btn btn-ghost btn-small"
-                onClick={() => setRows((prev) => [...prev, { ...EMPTY_ROW }])}
+                onClick={() => {
+                  setRowsTouched(true);
+                  setRows((prev) => [...prev, { ...EMPTY_ROW }]);
+                }}
                 disabled={rows.length >= 20}
               >
                 + Add line
               </button>
             </div>
-            {parsedItems.rowError && (
+            {rowsTouched && parsedItems.rowError && (
               <div className="error" role="alert" style={{ marginTop: 12 }}>
                 {parsedItems.rowError}
               </div>

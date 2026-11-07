@@ -294,7 +294,8 @@ export default function PolicyPage() {
           id="sellers"
           value={sellers}
           onChange={(e) => setSellers(e.target.value)}
-          placeholder={"alice.testnet\nbob.testnet\n\nLeave empty to allow any seller."}
+          placeholder="One per line, e.g. alice.testnet. Leave empty to allow any seller."
+          rows={3}
           autoComplete="off"
         />
         <div className="row" style={{ marginTop: 18 }}>

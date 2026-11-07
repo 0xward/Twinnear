@@ -1,9 +1,6 @@
 import { Link } from "react-router-dom";
 import { CONTRACT_ID, EXPECTED_WASM_SHA256, EXPLORER_URL } from "../lib/config";
-
-const TX_CREATE = "14nev3LUrvanzZvVQc25373q85NCeKD7Ee5PEQ6ps8yP";
-const TX_PAY = "GWzwgrctqSBdYhG79LSo5BM1RwU8RxQBBVyyT7bpQTLA";
-const TX_RELEASE = "ARUyJbgZTvdgTtR58p2F8PPTDKB977TjpLMyweziwRNJ";
+import { INVOICE_1_TX } from "../lib/invoiceTx";
 
 function txLink(hash: string, label: string) {
   return (
@@ -142,7 +139,7 @@ export default function About() {
         <dl className="kv">
           <dt>Reference</dt>
           <dd>
-            <Link to="/pay/1">TW-2026-0001</Link>
+            <Link to="/invoice/1">TW-2026-0001</Link>
           </dd>
           <dt>Amount</dt>
           <dd>0.05 NEAR</dd>
@@ -155,25 +152,32 @@ export default function About() {
           <dt>Created</dt>
           <dd>
             7 Nov 2026, 10:12 WIB ·{" "}
-            {txLink(TX_CREATE, "14nev3LUrvanzZvVQc25373q85NCeKD7Ee5PEQ6ps8yP")}
+            {txLink(
+              INVOICE_1_TX.create,
+              "14nev3LUrvanzZvVQc25373q85NCeKD7Ee5PEQ6ps8yP",
+            )}
           </dd>
           <dt>Paid</dt>
           <dd>
             7 Nov 2026, 10:51 WIB ·{" "}
-            {txLink(TX_PAY, "GWzwgrctqSBdYhG79LSo5BM1RwU8RxQBBVyyT7bpQTLA")}
+            {txLink(
+              INVOICE_1_TX.pay,
+              "GWzwgrctqSBdYhG79LSo5BM1RwU8RxQBBVyyT7bpQTLA",
+            )}
           </dd>
           <dt>Released</dt>
           <dd>
             7 Nov 2026, 11:02 WIB ·{" "}
             {txLink(
-              TX_RELEASE,
+              INVOICE_1_TX.release,
               "ARUyJbgZTvdgTtR58p2F8PPTDKB977TjpLMyweziwRNJ",
             )}
           </dd>
         </dl>
         <p className="muted" style={{ marginTop: 10 }}>
           The invoice survived the v1 to v2 migration unchanged, on the
-          same day it was created.
+          same day it was created. Open it as anyone can, no wallet
+          needed: <Link to="/invoice/1">the public view</Link>.
         </p>
       </div>
 

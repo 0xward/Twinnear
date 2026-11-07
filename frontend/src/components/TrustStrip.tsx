@@ -65,6 +65,9 @@ export default function TrustStrip() {
       )}
       <span>No fees. No signup. No custody.</span>
       <span>
+        <Link to="/invoice/1">See invoice #1, paid and released</Link>
+      </span>
+      <span>
         <Link to="/about">What is Twinnear?</Link>
       </span>
     </div>

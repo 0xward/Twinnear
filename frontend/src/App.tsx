@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
 import WalletButton from "./components/WalletButton";
 
 // Route pages are lazy-loaded so the initial bundle stays small; the
@@ -11,6 +11,7 @@ const Faq = lazy(() => import("./pages/Faq"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const NewInvoice = lazy(() => import("./pages/NewInvoice"));
 const PayInvoice = lazy(() => import("./pages/PayInvoice"));
+const PublicInvoice = lazy(() => import("./pages/PublicInvoice"));
 const PolicyPage = lazy(() => import("./pages/Policy"));
 const Portal = lazy(() => import("./pages/Portal"));
 const Recurring = lazy(() => import("./pages/Recurring"));
@@ -44,7 +45,7 @@ export default function App() {
         <NavLink to="/invoices/new">New invoice</NavLink>
         <NavLink to="/recurring">Retainers</NavLink>
         <NavLink to="/portal">Client portal</NavLink>
-        <NavLink to="/settings">Spend guard</NavLink>
+        <NavLink to="/spend-guard">Spend guard</NavLink>
         <NavLink to="/about">About</NavLink>
         <NavLink to="/docs">Docs</NavLink>
         <NavLink to="/faq">FAQ</NavLink>
@@ -58,7 +59,13 @@ export default function App() {
           <Route path="/recurring" element={<Recurring />} />
           <Route path="/portal" element={<Portal />} />
           <Route path="/pay/:id" element={<PayInvoice />} />
-          <Route path="/settings" element={<PolicyPage />} />
+          <Route path="/invoice/:id" element={<PublicInvoice />} />
+          <Route path="/spend-guard" element={<PolicyPage />} />
+          {/* Old URL: keep bookmarks and older links working. */}
+          <Route
+            path="/settings"
+            element={<Navigate to="/spend-guard" replace />}
+          />
           <Route path="/about" element={<About />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/faq" element={<Faq />} />
