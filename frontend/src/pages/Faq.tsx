@@ -77,20 +77,22 @@ export default function Faq() {
       <div className="card">
         <h2>Does the spend guard protect USDC payments?</h2>
         <p>
-          Only in part. For a NEAR invoice, the guard protects you in
-          full: your max per invoice, your daily cap, and your seller
-          allowlist are all enforced. For a USDC invoice, only the
-          allowlist applies. There is no escrow and no amount or daily
-          cap, because a USDC amount is micro-USDC, not yoctoNEAR,
-          and the caps are denominated in NEAR.
+          Yes, with one exception. For a NEAR invoice, the guard
+          protects you in full: your max per invoice, your daily cap,
+          and your seller allowlist are all enforced. For a USDC
+          invoice, your own USDC caps apply in micro-USDC: a max per
+          invoice at creation, a daily cap when the seller confirms
+          the external payment, and the same allowlist.
         </p>
         <p>
-          A USDC invoice settles straight to the seller through 1Click
-          and is closed by the seller&apos;s own confirmation, which
-          nothing on chain verifies. So a USDC invoice is not as safe
-          as a NEAR one. Pay one only if you trust the seller, or set
-          an allowlist that keeps sellers you do not trust from
-          invoicing you at all.
+          The exception is the receipt itself. A USDC invoice settles
+          straight to the seller through 1Click and is closed by the
+          seller&apos;s own confirmation, which nothing on chain
+          verifies. The caps limit how much a seller can invoice and
+          confirm, but they cannot prove the money arrived. So a USDC
+          invoice is not as safe as a NEAR one. Pay one only if you
+          trust the seller, or set an allowlist that keeps sellers
+          you do not trust from invoicing you at all.
         </p>
       </div>
 

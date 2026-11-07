@@ -4,11 +4,29 @@ Target account: **`twinnear.testnet`** (created in Meteor Wallet, funded
 with 4 NEAR from the faucet — 0.2 NEAR is the storage reserve, ~3.8 NEAR
 usable).
 
-Contract status: **v2 LIVE** since 2026-11-07 (deployed via Termux +
-near-cli-rs, wasm 213,007 bytes, SHA-256
-`dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0`).
+Contract status: **v3 LIVE** since 2026-11-07 (deployed via Termux +
+near-cli-rs, wasm 222,775 bytes, SHA-256
+`2894e4310c6972a2420bb02502cb60b9b84b13b51308966a9cca79669ee20835`).
 The v2 upgrade was a **redeploy + migrate** — see "Redeploy + migrate
 (v2)" below. Never call `new` again after the first deploy.
+
+**v4 (2026-11-07, NOT YET DEPLOYED — code ready, awaiting the
+owner's Termux run): USDC spend-guard caps + 39 adversarial /
+conformance tests (90 unit tests total). This is a redeploy +
+MIGRATE upgrade — unlike v3, the state schema DOES change: the
+contract gains a new `usdc_policies` map (prefix `b"u"`), so after
+deploying the v4 wasm you MUST call `migrate` (owner only, one tx).
+Migration moves every invoice (#1–#4), the NEAR policies, the
+relayer, the meta nonces, and the escrow accounting over untouched
+and adds an initially empty USDC-policy map — nothing is reset. A
+second `migrate` panics harmlessly and leaves the state untouched.
+After migrate, verify `get_version` returns 4 and invoice #1 is
+still Paid/released. New wasm: 224,493 bytes, SHA-256
+`3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`.
+Download it from the repo:
+`https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm`
+— then check the SHA before deploying (see the exact Termux
+commands in "Redeploy + migrate (v4)" below).
 
 **v3 (2026-11-07): NEP-413 verification fix — code-only redeploy, NO
 migrate.** The v3 code changes only the signature verification
@@ -158,6 +176,45 @@ near contract call-function as-read-only twinnear.testnet get_invoice json-args 
 > the contract and would wipe the ledger. The Deploy page's
 > "Redeploy code only (no init)" button sends DeployContract alone;
 > `migrate` still has to run from the CLI afterwards.
+
+## Redeploy + migrate (v4 upgrade)
+
+Same shape as the v2 upgrade, but the migration is different: v4
+does NOT rewrite any invoice or policy — it only adds the new,
+initially empty `usdc_policies` map. Run from Termux (proot-distro
+Ubuntu, near-cli-rs 0.31.1, `sign-with-legacy-keychain`):
+
+```bash
+# 0. Download the v4 wasm and CHECK the SHA before deploying.
+curl -sL -o twinnear.wasm \
+  https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm
+sha256sum twinnear.wasm
+# → 3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57
+#    (224,493 bytes). If the hash differs, STOP — do not deploy.
+
+# 1. Deploy the v4 wasm WITHOUT init.
+near contract deploy twinnear.testnet use-file twinnear.wasm without-init-call network-config testnet sign-with-legacy-keychain send
+
+# 2. Migrate the state v3 → v4 (owner only, one tx). REQUIRED for v4
+#    — unlike v3, the state schema changed. Moves invoices #1–#4, the
+#    NEAR policies, the relayer, meta nonces and escrow accounting over
+#    untouched; adds an empty USDC-policy map. A second migrate panics
+#    harmlessly and leaves the state untouched.
+near contract call-function as-transaction twinnear.testnet migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' sign-as twinnear.testnet network-config testnet sign-with-legacy-keychain send
+
+# 3. Verify:
+near contract call-function as-read-only twinnear.testnet get_version json-args '{}' network-config testnet now
+# → 4
+near contract call-function as-read-only twinnear.testnet get_invoice json-args '{"id": 1}' network-config testnet now
+# → invoice #1 intact (0.05 NEAR, Paid, released)
+near contract call-function as-read-only twinnear.testnet get_usdc_policy json-args '{"account_id": "0xward.testnet"}' network-config testnet now
+# → null (no USDC policy set yet — expected)
+
+# 4. Re-test the gasless flow end to end (the relayer key and the
+#    NEP-413 verification are unchanged, but a redeploy is a redeploy):
+#    create a small invoice from the site as twinnear.testnet with the
+#    relayer, and confirm it lands on chain.
+```
 
 Current build (v1, 2026-11-07, phase 2 + QA fixes, optimized):
 - Size: **194,009 bytes** (raw cargo build 242,681 bytes after `strip`)

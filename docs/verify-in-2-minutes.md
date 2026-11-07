@@ -44,7 +44,7 @@ Notes for the person pasting this into the README:
   page reads invoice #1 from the contract, the explorer account
   is live, the RPC hash above matches the local
   `contract/twinnear.wasm` and `EXPECTED_WASM_SHA256` in
-  `frontend/src/lib/config.ts`, and `cargo test` passes 50/50.
+  `frontend/src/lib/config.ts`, and `cargo test` passes 90/90.
 - The public invoice page is `/#/invoice/1` (route `/invoice/:id`,
   page `frontend/src/pages/PublicInvoice.tsx`). It uses only the
   `get_invoice` view call and never opens a wallet.

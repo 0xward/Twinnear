@@ -29,7 +29,7 @@ import type { providers } from "near-api-js";
 import type { WalletSelector } from "@near-wallet-selector/core";
 import type { WalletSelectorModal } from "@near-wallet-selector/modal-ui";
 import { CONTRACT_ID, NETWORK_ID, RPC_URL } from "./config";
-import type { Invoice, Policy } from "./types";
+import type { Invoice, Policy, UsdcPolicy } from "./types";
 
 let selectorPromise: Promise<WalletSelector> | null = null;
 let modal: WalletSelectorModal | null = null;
@@ -319,6 +319,15 @@ export async function getPolicy(accountId: string): Promise<Policy | null> {
     | null;
 }
 
+/** USDC spend-guard policy of an account (v4), if one is set. */
+export async function getUsdcPolicy(
+  accountId: string,
+): Promise<UsdcPolicy | null> {
+  return (await viewCall("get_usdc_policy", { account_id: accountId })) as
+    | UsdcPolicy
+    | null;
+}
+
 export async function getOwner(): Promise<string> {
   return (await viewCall("get_owner", {})) as string;
 }
@@ -509,21 +518,29 @@ export async function claimRefund(id: number): Promise<unknown> {
  * Set (or replace) the caller's spend-guard policy (H-07): an
  * unparseable amount THROWS instead of silently becoming "no limit".
  * Empty string = no limit (0). `maxTotalPerDayNear` caps escrow
- * payments per UTC day; empty = no cap.
+ * payments per UTC day; empty = no cap. v4: `usdcMaxAmount` /
+ * `usdcDailyCap` set the USDC caps (micro-USDC) in the same call;
+ * empty = no cap.
  */
 export async function setPolicy(
   maxAmountNear: string,
   allowedSellers: string[],
   maxTotalPerDayNear: string,
+  usdcMaxAmount: string,
+  usdcDailyCap: string,
 ): Promise<unknown> {
   const maxAmount = parseOptionalNear(maxAmountNear, "Max amount");
   const maxTotal = parseOptionalNear(maxTotalPerDayNear, "Max total per day");
+  const usdcMax = parseOptionalUsdc(usdcMaxAmount, "Max USDC amount");
+  const usdcDaily = parseOptionalUsdc(usdcDailyCap, "Max USDC total per day");
   return callContract(
     "set_policy",
     {
       max_amount: maxAmount,
       allowed_sellers: allowedSellers,
       max_total_per_day: maxTotal,
+      usdc_max_amount: usdcMax,
+      usdc_daily_cap: usdcDaily,
     },
     "0",
   );
@@ -536,6 +553,19 @@ function parseOptionalNear(value: string, label: string): string {
   if (!parsed) {
     throw new Error(
       `${label} "${value}" is not a plain decimal amount. Use a number like 1.5 (no exponents, at most 24 decimal places).`,
+    );
+  }
+  return parsed;
+}
+
+/** Like parseOptionalNear, but for USDC amounts (max 6 decimals). */
+function parseOptionalUsdc(value: string, label: string): string {
+  const v = value.trim();
+  if (v === "" || v === "0") return "0";
+  const parsed = parseUsdcAmount(v);
+  if (!parsed) {
+    throw new Error(
+      `${label} "${value}" is not a plain decimal USDC amount. Use a number like 12.34 (no exponents, at most 6 decimal places).`,
     );
   }
   return parsed;

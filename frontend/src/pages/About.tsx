@@ -209,7 +209,7 @@ export default function About() {
           <dt>First deployed</dt>
           <dd>7 November 2026, upgraded to v2 the same day</dd>
           <dt>Tests</dt>
-          <dd>50 unit tests pass</dd>
+          <dd>90 unit tests pass</dd>
           <dt>Network</dt>
           <dd>NEAR testnet only</dd>
         </dl>
@@ -254,16 +254,19 @@ export default function About() {
           <li>
             <strong>
               The spend guard protects NEAR payments in full, and USDC
-              payments only in part.
+              payments in full too — except the receipt.
             </strong>{" "}
             For a NEAR invoice, your max per invoice, your daily cap,
             and your seller allowlist are all enforced, at creation
-            and at payment. For a USDC invoice, only the allowlist
-            applies. There is no escrow and no amount or daily cap,
-            because a USDC amount is micro-USDC, not yoctoNEAR, and
-            the caps are denominated in NEAR. A policy change can also
-            make a previously created invoice unpayable. That is the
-            point of the guard, an emergency brake, not a bug.
+            and at payment. For a USDC invoice, your own USDC caps
+            apply in micro-USDC: a max per invoice at creation, a
+            daily cap when the seller confirms the external payment,
+            and the same allowlist. There is still no escrow for USDC:
+            it settles via 1Click, and the seller closes the invoice
+            by saying payment arrived, which nothing on chain verifies.
+            A policy change can also make a previously created invoice
+            unpayable. That is the point of the guard, an emergency
+            brake, not a bug.
           </li>
           <li>
             <strong>The relayer is trusted for gasless creation.</strong>{" "}
@@ -272,7 +275,7 @@ export default function About() {
             seller&apos;s invoice, but it can refuse service.
           </li>
           <li>
-            <strong>No formal audit.</strong> The contract has 50 unit
+            <strong>No formal audit.</strong> The contract has 90 unit
             tests and a QA review, but no third-party audit.
           </li>
           <li>

@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import {
   extractTxHash,
   formatNear,
+  formatUsdc,
   friendlyError,
   getPolicy,
   getSignedInAccount,
+  getUsdcPolicy,
   isAccountForNetwork,
   isPlainDecimalAmount,
+  isPlainUsdcAmount,
   isValidAccountId,
   setPolicy,
 } from "../lib/near";
-import type { Policy } from "../lib/types";
+import type { Policy, UsdcPolicy } from "../lib/types";
 import { EXPLORER_URL } from "../lib/config";
 import CurrencyIcon from "../components/CurrencyIcon";
 
@@ -23,8 +26,11 @@ import CurrencyIcon from "../components/CurrencyIcon";
 export default function PolicyPage() {
   const [account, setAccount] = useState<string | null>(null);
   const [current, setCurrent] = useState<Policy | null>(null);
+  const [currentUsdc, setCurrentUsdc] = useState<UsdcPolicy | null>(null);
   const [maxAmount, setMaxAmount] = useState("");
   const [maxTotalPerDay, setMaxTotalPerDay] = useState("");
+  const [usdcMaxAmount, setUsdcMaxAmount] = useState("");
+  const [usdcDailyCap, setUsdcDailyCap] = useState("");
   const [sellers, setSellers] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -39,8 +45,12 @@ export default function PolicyPage() {
       const acct = await getSignedInAccount();
       setAccount(acct);
       if (acct) {
-        const policy = await getPolicy(acct);
+        const [policy, usdcPolicy] = await Promise.all([
+          getPolicy(acct),
+          getUsdcPolicy(acct),
+        ]);
         setCurrent(policy);
+        setCurrentUsdc(usdcPolicy);
         if (policy) {
           setMaxAmount(
             policy.max_amount === "0" ? "" : formatNear(policy.max_amount),
@@ -51,6 +61,18 @@ export default function PolicyPage() {
               : formatNear(policy.max_total_per_day),
           );
           setSellers(policy.allowed_sellers.join("\n"));
+        }
+        if (usdcPolicy) {
+          setUsdcMaxAmount(
+            usdcPolicy.max_amount === "0"
+              ? ""
+              : formatUsdc(usdcPolicy.max_amount),
+          );
+          setUsdcDailyCap(
+            usdcPolicy.max_total_per_day === "0"
+              ? ""
+              : formatUsdc(usdcPolicy.max_total_per_day),
+          );
         }
       }
     } catch (e) {
@@ -100,6 +122,28 @@ export default function PolicyPage() {
       );
       return;
     }
+    const usdcMax = usdcMaxAmount.trim();
+    if (
+      usdcMax !== "" &&
+      usdcMax !== "0" &&
+      !isPlainUsdcAmount(usdcMax)
+    ) {
+      setError(
+        "Max USDC amount must be a plain decimal number (e.g. 12.34, at most 6 decimal places), or empty for no limit.",
+      );
+      return;
+    }
+    const usdcDaily = usdcDailyCap.trim();
+    if (
+      usdcDaily !== "" &&
+      usdcDaily !== "0" &&
+      !isPlainUsdcAmount(usdcDaily)
+    ) {
+      setError(
+        "Max USDC total per day must be a plain decimal number (e.g. 50, at most 6 decimal places), or empty for no limit.",
+      );
+      return;
+    }
     const allowed = parseSellers(sellers);
     const deduped = [...new Set(allowed)];
     for (const s of deduped) {
@@ -118,7 +162,7 @@ export default function PolicyPage() {
     try {
       // H-07: setPolicy throws on an unparseable amount instead of
       // silently storing "no limit".
-      const res = await setPolicy(value, deduped, daily);
+      const res = await setPolicy(value, deduped, daily, usdcMax, usdcDaily);
       setTxHash(extractTxHash(res));
       setDone(
         "Policy submitted. Confirm it in your wallet, then press \"Refresh\" below to see the result.",
@@ -131,10 +175,13 @@ export default function PolicyPage() {
   }
 
   const rulesActive =
-    !!current &&
-    (current.max_amount !== "0" ||
-      current.max_total_per_day !== "0" ||
-      current.allowed_sellers.length > 0);
+    (!!current &&
+      (current.max_amount !== "0" ||
+        current.max_total_per_day !== "0" ||
+        current.allowed_sellers.length > 0)) ||
+    (!!currentUsdc &&
+      (currentUsdc.max_amount !== "0" ||
+        currentUsdc.max_total_per_day !== "0"));
 
   if (loading) {
     return (
@@ -201,6 +248,31 @@ export default function PolicyPage() {
           </div>
         </div>
         <div className="stat">
+          <div className="label">Max per USDC invoice</div>
+          <div className="value amount" style={{ fontSize: 22 }}>
+            {currentUsdc && currentUsdc.max_amount !== "0" ? (
+              <>
+                {formatUsdc(currentUsdc.max_amount)}{" "}
+                <CurrencyIcon currency="Usdc" />
+              </>
+            ) : (
+              "No limit"
+            )}
+          </div>
+          <div className="label" style={{ marginTop: 2 }}>
+            {currentUsdc && currentUsdc.max_total_per_day !== "0" ? (
+              <>
+                {formatUsdc(currentUsdc.max_total_per_day)}{" "}
+                <CurrencyIcon currency="Usdc" /> per day (
+                {formatUsdc(currentUsdc.daily_spent)}{" "}
+                <CurrencyIcon currency="Usdc" /> confirmed today)
+              </>
+            ) : (
+              "no USDC daily cap set"
+            )}
+          </div>
+        </div>
+        <div className="stat">
           <div className="label">Allowed sellers</div>
           <div className="value amount" style={{ fontSize: 22 }}>
             {current && current.allowed_sellers.length > 0
@@ -250,6 +322,30 @@ export default function PolicyPage() {
               "No daily cap"
             )}
           </dd>
+          <dt>USDC limit</dt>
+          <dd>
+            {currentUsdc && currentUsdc.max_amount !== "0" ? (
+              <>
+                {formatUsdc(currentUsdc.max_amount)}{" "}
+                <CurrencyIcon currency="Usdc" /> per invoice
+              </>
+            ) : (
+              "No limit"
+            )}
+          </dd>
+          <dt>USDC daily cap</dt>
+          <dd>
+            {currentUsdc && currentUsdc.max_total_per_day !== "0" ? (
+              <>
+                {formatUsdc(currentUsdc.max_total_per_day)}{" "}
+                <CurrencyIcon currency="Usdc" /> per day (
+                {formatUsdc(currentUsdc.daily_spent)}{" "}
+                <CurrencyIcon currency="Usdc" /> confirmed today)
+              </>
+            ) : (
+              "No USDC daily cap"
+            )}
+          </dd>
           <dt>Allowlist</dt>
           <dd>
             {current && current.allowed_sellers.length > 0
@@ -291,10 +387,15 @@ export default function PolicyPage() {
         invoice created before you set a policy can no longer be paid once
         it breaks your current rules. A daily total cap also applies to
         escrow payments (it resets at midnight UTC; editing these settings
-        never resets today&apos;s spent amount). Payments from another
-        chain via 1Click are <em>not</em> covered: the contract never sees
-        that money, so it cannot enforce a limit on it. External
-        payments do not count toward your daily cap either.
+        never resets today&apos;s spent amount). USDC invoices have their
+        own caps, in USDC: a max amount per invoice, checked at creation,
+        and a daily total, checked when the seller confirms the external
+        payment. The allowlist applies to NEAR and USDC alike. What the
+        guard cannot do: verify that an external (1Click) payment really
+        arrived. The seller attests the receipt when confirming, and the
+        contract never sees that money, so an external payment is
+        labelled &ldquo;external (unverified)&rdquo; even when it respects
+        your caps.
       </div>
 
       <hr className="rule" />
@@ -313,6 +414,24 @@ export default function PolicyPage() {
           id="maxTotalPerDay"
           value={maxTotalPerDay}
           onChange={(e) => setMaxTotalPerDay(e.target.value)}
+          placeholder="Leave empty for no daily cap"
+          inputMode="decimal"
+          autoComplete="off"
+        />
+        <label htmlFor="usdcMaxAmount">Max amount per invoice (USDC)</label>
+        <input
+          id="usdcMaxAmount"
+          value={usdcMaxAmount}
+          onChange={(e) => setUsdcMaxAmount(e.target.value)}
+          placeholder="Leave empty for no limit"
+          inputMode="decimal"
+          autoComplete="off"
+        />
+        <label htmlFor="usdcDailyCap">Max total per day (USDC)</label>
+        <input
+          id="usdcDailyCap"
+          value={usdcDailyCap}
+          onChange={(e) => setUsdcDailyCap(e.target.value)}
           placeholder="Leave empty for no daily cap"
           inputMode="decimal"
           autoComplete="off"
@@ -338,7 +457,7 @@ export default function PolicyPage() {
               if (
                 !window.confirm(
                   "Remove your spend-guard rules? This clears the max amount " +
-                    "per invoice, the daily cap, and the seller allowlist. Saving afterwards " +
+                    "per invoice, the daily cap, the USDC caps, and the seller allowlist. Saving afterwards " +
                     "leaves this account with no protection at all.",
                 )
               ) {
@@ -346,6 +465,8 @@ export default function PolicyPage() {
               }
               setMaxAmount("");
               setMaxTotalPerDay("");
+              setUsdcMaxAmount("");
+              setUsdcDailyCap("");
               setSellers("");
             }}
           >
@@ -354,8 +475,8 @@ export default function PolicyPage() {
         </div>
       </form>
       <p className="muted" style={{ marginTop: 14 }}>
-        “Clear rules” empties all three fields. Saving then removes your
-        limit, daily cap, and allowlist entirely.
+        “Clear rules” empties all five fields. Saving then removes your
+        limit, daily cap, USDC caps, and allowlist entirely.
       </p>
       </div>
     </div>

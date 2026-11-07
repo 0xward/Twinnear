@@ -59,3 +59,16 @@ export interface Policy {
   /** Day number (`block_timestamp_ns / 86_400_000_000_000`). */
   daily_spent_day: number;
 }
+
+/** USDC spend-guard policy (contract v4). Same shape as `Policy`,
+ *  denominated in micro-USDC (6 decimals). */
+export interface UsdcPolicy {
+  /** Max amount (micro-USDC) per USDC invoice. "0" = no limit. */
+  max_amount: string;
+  /** Max total confirmable via external payment per UTC day. "0" = no limit. */
+  max_total_per_day: string;
+  /** Amount already confirmed via external payment on `daily_spent_day`. */
+  daily_spent: string;
+  /** Day number (`block_timestamp_ns / 86_400_000_000_000`). */
+  daily_spent_day: number;
+}

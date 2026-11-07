@@ -20,16 +20,20 @@ Testnet only. No AI.
 
 ## Live status
 
-- **Contract:** `twinnear.testnet`, schema version 3 (`get_version` returns 3)
-- **Wasm SHA-256:** `dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0`
+- **Contract:** `twinnear.testnet`, schema version 4 (`get_version` returns 4)
+  — v4 code is ready and pushed; the on-chain contract is still v3 until
+  the owner runs the redeploy + migrate in `DEPLOY.md`
+- **Wasm SHA-256 (v4):** `3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`
 - **First deployed:** 7 November 2026. **Upgraded to v2:** same day, with
   an owner-only state migration (`migrate`). Invoice #1 survived the
-  migration unchanged.
+  migration unchanged. **Upgraded to v3:** same day, code-only (NEP-413
+  verification fix, no migrate). **v4:** USDC spend-guard caps +
+  39 adversarial/conformance tests (redeploy + migrate, see `DEPLOY.md`).
 - **Site:** https://twinnear.vercel.app
 - **About:** https://twinnear.vercel.app/#/about
 - **Guides:** https://twinnear.vercel.app/#/docs
 - **Repo:** https://github.com/0xward/Twinnear
-- **Tests:** 51 unit tests pass (`cargo test` in `contract/`)
+- **Tests:** 90 unit tests pass (`cargo test` in `contract/`)
 
 Invoices, retainers, the client portal, PDF export, and the pay flow
 (create, pay into escrow, release) all work against the live contract.

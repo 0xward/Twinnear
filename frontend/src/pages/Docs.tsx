@@ -202,13 +202,16 @@ export default function Docs() {
         </ul>
         <p className="muted">
           Limits: the guard protects NEAR payments in full, and USDC
-          payments only in part. For a USDC invoice, only the
-          allowlist applies. There is no escrow and no amount or daily
-          cap, because a USDC amount is micro-USDC, not yoctoNEAR,
-          and the caps are denominated in NEAR. The guard also does
-          not cover external (1Click) payments. A policy change can
-          make a previously created invoice unpayable. That is the
-          point of the guard, an emergency brake, not a bug.
+          payments in full too, except the receipt. For a USDC
+          invoice, your own USDC caps apply in micro-USDC: a max
+          amount per invoice at creation and a daily cap at
+          confirmation, plus the allowlist. There is no escrow for
+          USDC, and the seller&apos;s confirmation that payment
+          arrived is attested, not verified on chain. The guard also
+          does not cover external (1Click) payments in the sense of
+          verifying them. A policy change can make a previously
+          created invoice unpayable. That is the point of the guard,
+          an emergency brake, not a bug.
         </p>
       </div>
 
