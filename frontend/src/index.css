@@ -28,18 +28,18 @@
   --logo-teal-soft: #e2ecef;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 8px 24px rgba(28, 26, 23, 0.06);
-  /* Font trial 2 (2026-11-07, user request, reversible): the
-   * Special Elite typewriter trial was rejected ("jelek"). Before
-   * reverting, try the neo-brutalist poster font: Anton (Google
-   * Fonts), a heavy condensed display face, for headings and big
-   * numbers only. Body text is back to the pre-trial system sans.
-   * Previous values (for the revert): --serif Georgia, "Times New
-   * Roman", Times, serif; --sans -apple-system, BlinkMacSystemFont,
-   * "Segoe UI", Roboto, sans-serif; headings used var(--serif) with
-   * font-weight 600 and letter-spacing -0.01em; no Google Fonts
-   * <link> in index.html. To revert, restore those and remove the
-   * Anton <link>. */
-  --display: "Anton", "Arial Black", sans-serif;
+  /* Font trial 3 (2026-11-07, user request, reversible): the Anton
+   * trial was rejected ("jelek"). Try the job-board screenshot
+   * font: Playfair Display (Google Fonts), a high-contrast bold
+   * serif, for headings and big numbers only. Body text stays on
+   * the pre-trial system sans. Previous values (for the revert):
+   * --serif Georgia, "Times New Roman", Times, serif; --sans
+   * -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+   * sans-serif; headings used var(--serif) with font-weight 600
+   * and letter-spacing -0.01em; no Google Fonts <link> in
+   * index.html. To revert, restore those and remove the Playfair
+   * Display <link>. */
+  --display: "Playfair Display", Georgia, "Times New Roman", Times, serif;
   --serif: Georgia, "Times New Roman", Times, serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -73,8 +73,8 @@ h2,
 h3,
 .amount {
   font-family: var(--display);
-  font-weight: 400;
-  letter-spacing: 0.01em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 button {
