@@ -79,7 +79,7 @@ export default function Docs() {
         <ol className="steps">
           <li>
             <span>
-              Connect a testnet wallet (Meteor or OKX) and open{" "}
+              Connect a testnet wallet (Meteor) and open{" "}
               <Link to="/invoices/new">New invoice</Link>.
             </span>
           </li>

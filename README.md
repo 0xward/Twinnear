@@ -94,7 +94,7 @@ Freelancer                    Twinnear contract (NEAR)              Client
   meta-transactions, two-step owner transfer, escrow rescue.
 - **Frontend** (`frontend/`, React 18 + Vite 5 + TypeScript): PAPER
   design (paper-white, serif, ledger lines, one ink accent). NEAR
-  Wallet Selector with Meteor + OKX + Intear. Hash routing, so the static build
+  Wallet Selector with Meteor + OKX (mainnet-only) + Intear. Hash routing, so the static build
   serves anywhere.
 - **Relayer** (`relayer-server/`, Node, near-api-js): reference gasless
   relayer. It checks NEP-413 signatures off chain and submits
@@ -120,7 +120,7 @@ Then do this, and see this:
 
 | Do | See |
 | --- | --- |
-| Open the app, connect a testnet wallet (Meteor or OKX) | Your account in the header |
+| Open the app, connect a testnet wallet (Meteor) | Your account in the header |
 | Create an invoice for `alice.testnet`, amount `0.5`, any description | It appears in Invoices with status **Pending** |
 | Open its pay link (`#/pay/<id>`) as the client and pay | Status changes to **Paid**, funds held in escrow |
 | As the seller, click "Release to me" | Status becomes **Paid, released**, and the Ledger total "Received" increases by 0.5 Ⓝ |
@@ -271,8 +271,11 @@ this build. This build is payments only.
   open.
 - **Intear wallet is installed but unverified end to end.** The
   Intear module is registered in the wallet modal, but its connect
-  flow has not been tested with a real Intear account. Meteor and OKX
-  remain the verified login paths.
+  flow has not been tested with a real Intear account. Meteor remains
+  the verified login path.
+- **OKX Wallet is mainnet-only.** The OKX module is registered in the
+  wallet modal, but OKX only supports NEAR Mainnet, so it cannot
+  connect on testnet.
 - **There is no browser deploy.** Meteor Wallet refuses the
   DeployContract action, so deploys go through near-cli-rs (see
   [DEPLOY.md](DEPLOY.md)), tested from Termux on 2026-11-07.
