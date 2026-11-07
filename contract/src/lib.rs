@@ -14,10 +14,13 @@
 //!   (known limitation, documented in README).
 //! - Spend-guard (rule-based, no AI): any account can set a policy for
 //!   itself — a max amount per invoice, an allowlist of sellers, and a
-//!   max total per day. The policy is enforced at creation AND re-checked
-//!   at payment time; the daily cap is accounted in `pay_invoice`.
-//!   External (1Click) settlements never touch escrow, so the guard
-//!   cannot cover them — they are labelled "external (unverified)".
+//!   max total per day, in NEAR and (v4) in USDC. The policy is
+//!   enforced at creation AND re-checked at payment time; the daily
+//!   cap is accounted in `pay_invoice` (NEAR) and in
+//!   `confirm_external_payment` (USDC). External (1Click) settlements
+//!   never touch escrow, so the guard cannot verify the receipt —
+//!   the seller attests it — but the USDC caps still apply to the
+//!   amounts the seller can invoice and confirm.
 //! - Gasless meta-transactions (phase 2): a trusted relayer account (set by
 //!   the owner) may create invoices on a seller's behalf via
 //!   `create_invoice_meta`. The seller's NEP-413 ed25519 signature is
@@ -105,7 +108,10 @@ pub struct InvoiceLineItem {
     pub unit_price: U128,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq,
+    Eq,
+)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Invoice {
     pub id: u64,
@@ -151,6 +157,7 @@ pub struct Invoice {
 /// Rule-based spend-guard policy, set by an account for itself.
 #[derive(
     BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, Default,
+    PartialEq, Eq,
 )]
 #[serde(crate = "near_sdk::serde")]
 pub struct Policy {
@@ -170,6 +177,44 @@ pub struct Policy {
     pub daily_spent_day: u64,
 }
 
+/// USDC spend-guard policy (v4), set by an account for itself. Same
+/// shape and semantics as `Policy`, but denominated in micro-USDC
+/// (6 decimals) and enforced for USDC invoices: `max_amount` at
+/// creation, `max_total_per_day` at `confirm_external_payment`
+/// (the on-chain "payment" event for USDC, mirroring the NEAR daily
+/// cap check in `pay_invoice`).
+///
+/// WHY A SEPARATE MAP (v4 design decision): `Policy` values are
+/// stored under prefix b"p" in a `LookupMap`, which has no key
+/// enumeration on-chain — a migration could never rewrite the
+/// already-stored v3 `Policy` values. Extending the `Policy` struct
+/// would make v4 code unable to read any pre-existing v3 policy
+/// (Borsh missing-bytes error on read → panic on every
+/// create/pay for that client). Keeping `Policy` byte-identical
+/// means every existing policy keeps working untouched; the USDC
+/// caps live in their own map under prefix b"u", and the v3→v4
+/// migration only adds that (initially empty) map.
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, Default,
+    PartialEq, Eq,
+)]
+#[serde(crate = "near_sdk::serde")]
+pub struct UsdcPolicy {
+    /// Max amount (micro-USDC) a single USDC invoice may charge this
+    /// account. 0 = no limit.
+    pub max_amount: U128,
+    /// Total maximum confirmable via `confirm_external_payment` per
+    /// UTC calendar day. 0 = no limit.
+    pub max_total_per_day: U128,
+    /// Amount already confirmed via `confirm_external_payment` on
+    /// `daily_spent_day`. Internal accounting, not a setting —
+    /// `set_policy` preserves it.
+    pub daily_spent: U128,
+    /// Day number (`block_timestamp_ns / NS_PER_DAY`) that
+    /// `daily_spent` belongs to.
+    pub daily_spent_day: u64,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Contract {
@@ -177,6 +222,10 @@ pub struct Contract {
     next_invoice_id: u64,
     invoices: LookupMap<u64, Invoice>,
     policies: LookupMap<AccountId, Policy>,
+    /// USDC spend-guard policies (v4), one per account, mirroring
+    /// `policies` but in micro-USDC. Kept in its own map so the v3
+    /// `Policy` values stay byte-identical (see `UsdcPolicy`).
+    usdc_policies: LookupMap<AccountId, UsdcPolicy>,
     /// Trusted relayer account for gasless meta-transactions.
     /// `None` = meta-transactions disabled.
     relayer: Option<AccountId>,
@@ -200,42 +249,22 @@ pub struct Contract {
     pending_owner: Option<AccountId>,
 }
 
-/// v1 `Invoice`, byte-for-byte identical to the struct deployed on
-/// `twinnear.testnet` (13 fields, same order). Used ONLY by `migrate`
-/// to read pre-upgrade invoices. The v2 `Invoice` appends its new
-/// fields after these, so a v1-encoded invoice is a strict Borsh
-/// prefix of a v2-encoded one — except Borsh rejects trailing bytes,
-/// which is what makes a second `migrate` panic instead of
-/// silently re-running.
-#[derive(BorshDeserialize, BorshSerialize, Clone, Debug)]
-pub struct OldInvoice {
-    pub id: u64,
-    pub seller: AccountId,
-    pub client: AccountId,
-    pub amount: U128,
-    pub description: String,
-    pub status: InvoiceStatus,
-    pub released: bool,
-    pub created_at: u64,
-    pub paid_at: Option<u64>,
-    pub external_ref: Option<String>,
-    pub due_date: Option<u64>,
-    pub disputed: bool,
-    pub dispute_reason: Option<String>,
-}
-
-/// v1 top-level contract state, field order and `LookupMap` prefixes
-/// copied exactly from the deployed v1 (invoices b"i", policies b"p",
+/// v3 top-level contract state, field order and `LookupMap` prefixes
+/// copied exactly from the deployed v3 (invoices b"i", policies b"p",
 /// meta_nonces b"m", pending_transfers b"t", failed_transfers b"f",
-/// open_pending_count b"o"). Used ONLY by `migrate`. The v2
-/// `Contract` has the same field order and NO new top-level field,
-/// so the v1/v2 top-level state blobs are byte-identical — migration
-/// only rewrites the values stored under prefix b"i".
+/// open_pending_count b"o"). Used ONLY by `migrate` (v3→v4). The v4
+/// `Contract` appends exactly one field, `usdc_policies` (b"u"), so
+/// a v3 state blob is a strict Borsh prefix of a v4 one — but Borsh
+/// rejects trailing bytes, which is what makes a second `migrate`
+/// panic instead of silently re-running. The v3 `Invoice` and
+/// `Policy` structs are unchanged in v4, so every stored invoice
+/// and policy moves over untouched; only the new (initially empty)
+/// USDC-policy map is added.
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct OldContract {
+pub struct OldContractV3 {
     owner: AccountId,
     next_invoice_id: u64,
-    invoices: LookupMap<u64, OldInvoice>,
+    invoices: LookupMap<u64, Invoice>,
     policies: LookupMap<AccountId, Policy>,
     relayer: Option<AccountId>,
     meta_nonces: LookupMap<AccountId, u64>,
@@ -265,6 +294,7 @@ impl Contract {
             next_invoice_id: 1,
             invoices: LookupMap::new(b"i"),
             policies: LookupMap::new(b"p"),
+            usdc_policies: LookupMap::new(b"u"),
             relayer: None,
             meta_nonces: LookupMap::new(b"m"),
             pending_transfers: LookupMap::new(b"t"),
@@ -275,61 +305,35 @@ impl Contract {
         }
     }
 
-    /// Upgrade the contract state from v1 to v2. The ONLY upgrade
-    /// path. Owner only. Reads the v1 state, converts every invoice
-    /// (currency = Near, no line items, no tax, subtotal = amount,
-    /// tax = 0), and writes the v2 state. All other maps (policies,
-    /// meta nonces, pending/failed transfers, open counts) and scalar
-    /// fields move over untouched, under the same storage prefixes.
+    /// Upgrade the contract state from v3 to v4. The ONLY upgrade
+    /// path. Owner only. Reads the v3 state and moves every map and
+    /// scalar over untouched — invoices, NEAR policies, meta nonces,
+    /// pending/failed transfers, open counts, escrow total, relayer,
+    /// pending owner — under the same storage prefixes. The v3
+    /// `Invoice` and `Policy` structs are unchanged in v4, so no
+    /// value is rewritten; the only change is the new, initially
+    /// empty `usdc_policies` map (prefix b"u").
     ///
     /// After migrating, NEVER call `new` again on a redeploy — `new`
-    /// would wipe the state. A second `migrate` panics (a v2 invoice
-    /// no longer deserializes as `OldInvoice`: Borsh rejects the
-    /// trailing bytes) and leaves the state untouched.
+    /// would wipe the state. A second `migrate` panics (a v4 state
+    /// blob no longer deserializes as `OldContractV3`: Borsh rejects
+    /// the trailing bytes of the appended `usdc_policies` field) and
+    /// leaves the state untouched.
     #[init(ignore_state)]
     pub fn migrate() -> Self {
-        let old: OldContract =
-            env::state_read().expect("contract state v1 not found — nothing to migrate");
+        let old: OldContractV3 =
+            env::state_read().expect("contract state v3 not found — nothing to migrate");
         assert_eq!(
             env::predecessor_account_id(),
             old.owner,
             "only the owner can migrate"
         );
-        // NOTE: `set`, not `insert` — `insert` first LOADS the stored
-        // value (to return the old one), which would try to decode the
-        // v1 bytes as a v2 `Invoice` and panic. `set` only marks the
-        // cache entry modified; the v2 bytes are written on flush.
-        let mut invoices: LookupMap<u64, Invoice> = LookupMap::new(b"i");
-        for id in 1..old.next_invoice_id {
-            if let Some(old_inv) = old.invoices.get(&id) {
-                let invoice = Invoice {
-                    id: old_inv.id,
-                    seller: old_inv.seller.clone(),
-                    client: old_inv.client.clone(),
-                    amount: old_inv.amount,
-                    description: old_inv.description.clone(),
-                    status: old_inv.status.clone(),
-                    released: old_inv.released,
-                    created_at: old_inv.created_at,
-                    paid_at: old_inv.paid_at,
-                    external_ref: old_inv.external_ref.clone(),
-                    due_date: old_inv.due_date,
-                    disputed: old_inv.disputed,
-                    dispute_reason: old_inv.dispute_reason.clone(),
-                    currency: Currency::Near,
-                    items: vec![],
-                    tax_rate_bps: 0,
-                    subtotal: old_inv.amount,
-                    tax_amount: U128(0),
-                };
-                invoices.set(id, Some(invoice));
-            }
-        }
         Self {
             owner: old.owner,
             next_invoice_id: old.next_invoice_id,
-            invoices,
+            invoices: old.invoices,
             policies: old.policies,
+            usdc_policies: LookupMap::new(b"u"),
             relayer: old.relayer,
             meta_nonces: old.meta_nonces,
             pending_transfers: old.pending_transfers,
@@ -352,12 +356,12 @@ impl Contract {
     /// and `tax_amount == 0`. Otherwise `subtotal` / `tax_amount` are
     /// computed from the items and `amount` must equal their sum.
     /// `currency == Usdc` means `amount` is in micro-USDC: the
-    /// NEAR-denominated spend-guard `max_amount` (and the daily cap,
-    /// which is only enforced at NEAR-escrow payment time anyway)
-    /// cannot apply to a different unit, so those checks are skipped
-    /// for USDC — but the allowlist check still applies. The 0.01
-    /// NEAR storage deposit still applies: it pays for storage, not
-    /// for the invoice value.
+    /// NEAR-denominated spend-guard `max_amount` (yoctoNEAR) cannot
+    /// apply to a different unit, so the NEAR cap is skipped for
+    /// USDC — but the USDC cap (`usdc_max_amount`, v4, micro-USDC)
+    /// applies instead, and the allowlist check applies regardless
+    /// of currency. The 0.01 NEAR storage deposit still applies: it
+    /// pays for storage, not for the invoice value.
     fn create_invoice_inner(
         &mut self,
         seller: AccountId,
@@ -466,7 +470,7 @@ impl Contract {
         );
 
         if let Some(policy) = self.policies.get(&client) {
-            // v2: a USDC amount is micro-USDC, not yoctoNEAR, so the
+            // A USDC amount is micro-USDC, not yoctoNEAR, so the
             // NEAR-denominated max_amount cap cannot apply to it.
             // The allowlist still applies regardless of currency.
             if currency == Currency::Near && policy.max_amount.0 > 0 {
@@ -480,6 +484,21 @@ impl Contract {
                     policy.allowed_sellers.contains(&seller),
                     "seller is not on the client allowlist"
                 );
+            }
+        }
+        // v4: USDC invoices have their own per-invoice cap, in
+        // micro-USDC (the NEAR cap above is in yoctoNEAR and cannot
+        // apply). The USDC daily cap is enforced at confirmation
+        // time in `confirm_external_payment`, mirroring the NEAR
+        // daily cap at `pay_invoice` time.
+        if currency == Currency::Usdc {
+            if let Some(usdc) = self.usdc_policies.get(&client) {
+                if usdc.max_amount.0 > 0 {
+                    assert!(
+                        amount.0 <= usdc.max_amount.0,
+                        "amount exceeds client USDC spend-guard limit"
+                    );
+                }
             }
         }
 
@@ -530,8 +549,9 @@ impl Contract {
     /// for no deadline (the pay page warns the client about that).
     /// `currency`: `Near` (amount in yoctoNEAR) or `Usdc` (amount in
     /// micro-USDC; USDC invoices settle via 1Click, not escrow — see
-    /// `pay_invoice` — and skip the NEAR-denominated spend-guard
-    /// max_amount / daily cap, though the allowlist still applies).
+    /// `pay_invoice` — and enforce the USDC spend-guard caps
+    /// (`usdc_max_amount` at creation, `usdc_daily_cap` at
+    /// `confirm_external_payment`), while the allowlist still applies).
     /// `items`: line items (max 20); empty = single-line invoice,
     /// which requires `tax_rate_bps == 0`. With items, `amount` must
     /// equal subtotal + tax computed from the items.
@@ -735,6 +755,14 @@ impl Contract {
     /// settlements. This is a unilateral attestation — the UI labels it
     /// "Paid · external (unverified)" and it is NOT covered by the
     /// spend-guard and NOT counted toward the daily cap (M-02/M-03).
+    ///
+    /// v4: for USDC invoices, the client's USDC spend-guard IS
+    /// enforced here — the allowlist and the per-invoice cap are
+    /// re-checked as they stand now (M-03: the policy in force NOW
+    /// governs, not the one at creation), and the USDC daily cap is
+    /// enforced with day rollover and accounting, mirroring the NEAR
+    /// daily cap in `pay_invoice`. The receipt itself is still
+    /// attested, not verified on-chain.
     pub fn confirm_external_payment(&mut self, id: u64, reference: String) {
         let caller = env::predecessor_account_id();
         let mut invoice = self
@@ -755,12 +783,61 @@ impl Contract {
             is_valid_external_ref(&reference),
             "reference must be a 0x deposit address (42 chars) or tx hash (66 chars)"
         );
+        // v4: USDC spend-guard at confirmation time (the on-chain
+        // "payment" event for USDC). NEAR invoices confirmed here
+        // keep the pre-v4 behaviour (attested, no policy re-check).
+        if invoice.currency == Currency::Usdc {
+            self.check_usdc_policy_for_confirmation(&invoice);
+        }
         invoice.status = InvoiceStatus::Paid;
         invoice.released = true;
         invoice.paid_at = Some(env::block_timestamp());
         invoice.external_ref = Some(reference);
         self.invoices.insert(id, invoice.clone());
         self.decrement_open_count(&invoice.seller);
+    }
+
+    /// Re-check the client's CURRENT USDC spend-guard policy at
+    /// confirmation time (v4, M-03 for USDC): allowlist + per-invoice
+    /// cap as they stand now, plus the daily total cap. Accounts the
+    /// confirmed amount into `usdc_daily_spent` (with day rollover)
+    /// and persists it. Only called for USDC invoices.
+    fn check_usdc_policy_for_confirmation(&mut self, invoice: &Invoice) {
+        if let Some(policy) = self.policies.get(&invoice.client) {
+            if !policy.allowed_sellers.is_empty() {
+                assert!(
+                    policy.allowed_sellers.contains(&invoice.seller),
+                    "seller is not on the client allowlist"
+                );
+            }
+        }
+        if let Some(mut usdc) = self.usdc_policies.get(&invoice.client).cloned() {
+            if usdc.max_amount.0 > 0 {
+                assert!(
+                    invoice.amount.0 <= usdc.max_amount.0,
+                    "amount exceeds client USDC spend-guard limit"
+                );
+            }
+            // Daily cap: reset when the UTC day rolls over, then enforce.
+            let day = env::block_timestamp() / NS_PER_DAY;
+            if day != usdc.daily_spent_day {
+                usdc.daily_spent = U128(0);
+                usdc.daily_spent_day = day;
+            }
+            if usdc.max_total_per_day.0 > 0 {
+                assert!(
+                    usdc.daily_spent
+                        .0
+                        .checked_add(invoice.amount.0)
+                        .map(|total| total <= usdc.max_total_per_day.0)
+                        .unwrap_or(false),
+                    "payment exceeds client USDC daily total cap"
+                );
+            }
+            usdc.daily_spent = U128(usdc.daily_spent.0 + invoice.amount.0);
+            self.usdc_policies
+                .insert(invoice.client.clone(), usdc);
+        }
     }
 
     /// Re-check the client's CURRENT spend-guard policy at payment time
@@ -1138,11 +1215,18 @@ impl Contract {
     /// `daily_spent` / `daily_spent_day` are carried over from the
     /// existing policy (M-03). The allowlist is capped at 50 entries
     /// and deduplicated (L-12).
+    ///
+    /// v4: `usdc_max_amount` (micro-USDC per USDC invoice, 0 = no
+    /// limit) and `usdc_daily_cap` (micro-USDC confirmable per UTC
+    /// day, 0 = no limit) set the USDC caps in the same call; the
+    /// USDC daily accounting is carried over the same way.
     pub fn set_policy(
         &mut self,
         max_amount: U128,
         allowed_sellers: Vec<AccountId>,
         max_total_per_day: U128,
+        usdc_max_amount: U128,
+        usdc_daily_cap: U128,
     ) {
         assert!(
             allowed_sellers.len() <= MAX_ALLOWLIST,
@@ -1157,13 +1241,27 @@ impl Contract {
         let account = env::predecessor_account_id();
         let existing = self.policies.get(&account).cloned().unwrap_or_default();
         self.policies.insert(
-            account,
+            account.clone(),
             Policy {
                 max_amount,
                 allowed_sellers: deduped,
                 max_total_per_day,
                 daily_spent: existing.daily_spent,
                 daily_spent_day: existing.daily_spent_day,
+            },
+        );
+        let existing_usdc = self
+            .usdc_policies
+            .get(&account)
+            .cloned()
+            .unwrap_or_default();
+        self.usdc_policies.insert(
+            account,
+            UsdcPolicy {
+                max_amount: usdc_max_amount,
+                max_total_per_day: usdc_daily_cap,
+                daily_spent: existing_usdc.daily_spent,
+                daily_spent_day: existing_usdc.daily_spent_day,
             },
         );
     }
@@ -1173,9 +1271,11 @@ impl Contract {
     /// Schema version of this contract. v1 had no such method;
     /// v2 returns 2. v3 fixes the NEP-413 verification (tag + SHA-256);
     /// state schema is unchanged from v2, so a v2 -> v3 redeploy needs
-    /// NO migrate call.
+    /// NO migrate call. v4 adds the USDC spend-guard caps
+    /// (`UsdcPolicy` map, prefix b"u"); a v3 -> v4 redeploy NEEDS
+    /// `migrate` (the top-level state gains one field).
     pub fn get_version(&self) -> u32 {
-        3
+        4
     }
 
     pub fn get_invoice(&self, id: u64) -> Option<Invoice> {
@@ -1200,6 +1300,13 @@ impl Contract {
 
     pub fn get_policy(&self, account_id: AccountId) -> Option<Policy> {
         self.policies.get(&account_id).cloned()
+    }
+
+    /// USDC spend-guard policy of an account (v4), if one is set.
+    /// `None` = no USDC caps (any USDC amount allowed, allowlist
+    /// from the NEAR policy still applies).
+    pub fn get_usdc_policy(&self, account_id: AccountId) -> Option<UsdcPolicy> {
+        self.usdc_policies.get(&account_id).cloned()
     }
 
     pub fn get_owner(&self) -> AccountId {
@@ -1498,7 +1605,7 @@ mod tests {
     #[should_panic(expected = "amount exceeds client spend-guard limit")]
     fn policy_max_amount_enforced() {
         let mut c = setup(bob());
-        c.set_policy(U128(500), vec![], U128(0));
+        c.set_policy(U128(500), vec![], U128(0), U128(0), U128(0));
         set_predecessor(alice());
         c.create_invoice(bob(), U128(1_000), "too big".to_string(), None, Currency::Near, vec![], 0);
     }
@@ -1507,7 +1614,7 @@ mod tests {
     #[should_panic(expected = "seller is not on the client allowlist")]
     fn policy_allowlist_enforced() {
         let mut c = setup(bob());
-        c.set_policy(U128(0), vec![carol()], U128(0));
+        c.set_policy(U128(0), vec![carol()], U128(0), U128(0), U128(0));
         set_predecessor(alice());
         c.create_invoice(bob(), U128(100), "not allowed".to_string(), None, Currency::Near, vec![], 0);
     }
@@ -1515,7 +1622,7 @@ mod tests {
     #[test]
     fn policy_allowlist_allows_listed_seller() {
         let mut c = setup(bob());
-        c.set_policy(U128(0), vec![alice()], U128(0));
+        c.set_policy(U128(0), vec![alice()], U128(0), U128(0), U128(0));
         set_predecessor(alice());
         let id = c.create_invoice(bob(), U128(100), "ok".to_string(), None, Currency::Near, vec![], 0);
         assert_eq!(id, 1);
@@ -1524,7 +1631,7 @@ mod tests {
     #[test]
     fn set_policy_dedups_allowlist() {
         let mut c = setup(bob());
-        c.set_policy(U128(0), vec![alice(), alice(), carol()], U128(0));
+        c.set_policy(U128(0), vec![alice(), alice(), carol()], U128(0), U128(0), U128(0));
         let policy = c.get_policy(bob()).unwrap();
         assert_eq!(policy.allowed_sellers, vec![alice(), carol()]);
     }
@@ -1536,7 +1643,7 @@ mod tests {
         let sellers: Vec<AccountId> = (0..51)
             .map(|i| format!("seller{}.testnet", i).parse().unwrap())
             .collect();
-        c.set_policy(U128(0), sellers, U128(0));
+        c.set_policy(U128(0), sellers, U128(0), U128(0), U128(0));
     }
 
     #[test]
@@ -1755,7 +1862,7 @@ mod tests {
         c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
         // Client sets a stricter policy AFTER the invoice was created.
         set_predecessor(bob());
-        c.set_policy(U128(500), vec![], U128(0));
+        c.set_policy(U128(500), vec![], U128(0), U128(0), U128(0));
         pay_invoice_as(&mut c, 1, bob(), 1_000);
     }
 
@@ -1765,7 +1872,7 @@ mod tests {
         c.create_invoice(bob(), U128(1_000), "a".to_string(), None, Currency::Near, vec![], 0);
         c.create_invoice(bob(), U128(1_000), "b".to_string(), None, Currency::Near, vec![], 0);
         set_predecessor(bob());
-        c.set_policy(U128(0), vec![], U128(1_500));
+        c.set_policy(U128(0), vec![], U128(1_500), U128(0), U128(0));
         pay_invoice_as(&mut c, 1, bob(), 1_000);
         // Second 1,000 would exceed the 1,500/day cap.
         let over = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1784,11 +1891,11 @@ mod tests {
         let mut c = setup(alice());
         c.create_invoice(bob(), U128(1_000), "a".to_string(), None, Currency::Near, vec![], 0);
         set_predecessor(bob());
-        c.set_policy(U128(0), vec![], U128(5_000));
+        c.set_policy(U128(0), vec![], U128(5_000), U128(0), U128(0));
         pay_invoice_as(&mut c, 1, bob(), 1_000);
         // Edit the settings: daily accounting must survive.
         set_predecessor(bob());
-        c.set_policy(U128(2_000), vec![], U128(5_000));
+        c.set_policy(U128(2_000), vec![], U128(5_000), U128(0), U128(0));
         let policy = c.get_policy(bob()).unwrap();
         assert_eq!(policy.daily_spent, U128(1_000));
         assert_eq!(policy.max_amount, U128(2_000));
@@ -2149,10 +2256,11 @@ mod tests {
     fn create_invoice_usdc_skips_max_amount_but_keeps_allowlist() {
         // Client caps NEAR invoices at 500 yocto and allowlists alice.
         // A USDC invoice of 25.00 USDC (25_000_000 micro-USDC) is far
-        // above the NEAR cap, but the cap is in a different unit and
-        // must not apply; the allowlist still does.
+        // above the NEAR cap, but the NEAR cap is in a different unit
+        // and must not apply; the USDC cap (0 here = no limit) and the
+        // allowlist still do.
         let mut c = setup(bob());
-        c.set_policy(U128(500), vec![alice()], U128(0));
+        c.set_policy(U128(500), vec![alice()], U128(0), U128(0), U128(0));
         set_predecessor(alice());
         let id = c.create_invoice(
             bob(),
@@ -2200,41 +2308,134 @@ mod tests {
         pay_invoice_as(&mut c, 1, bob(), 25_000_000);
     }
 
-    /// Write the exact v1 state that is live on twinnear.testnet into
-    /// mock storage: owner twinnear.testnet, next id 2, one invoice
-    /// (#1, TW-2026-0001, seller twinnear.testnet, client
-    /// 0xward.testnet, 0.05 NEAR, Pending, created
-    /// 1794021148914561684, due 1795230748914561684).
-    fn write_v1_state_with_live_invoice_1() {
-        let mut invoices: LookupMap<u64, OldInvoice> = LookupMap::new(b"i");
+    /// Write the exact v3 state that is live on twinnear.testnet into
+    /// mock storage: owner twinnear.testnet, next id 5, four invoices
+    /// (#1 TW-2026-0001, 0.05 NEAR, Paid + released, created
+    /// 1794021148914561684; #2 retainer 1.01 NEAR Pending; #3
+    /// "Testing 2" 0.01 NEAR Pending; #4 "Testing 3" 0.01 NEAR
+    /// Pending, client 0xward.testnet, created 1794059451923263766,
+    /// due 1795269051923263766), a v3 NEAR policy for 0xward.testnet,
+    /// relayer twinnear.testnet, meta nonce alice = 3, open pending
+    /// count 3 for twinnear.testnet, total_escrowed 0.
+    fn write_v3_state_with_live_invoices() {
+        let mut invoices: LookupMap<u64, Invoice> = LookupMap::new(b"i");
         invoices.insert(
             1,
-            OldInvoice {
+            Invoice {
                 id: 1,
                 seller: contract_acct(),
                 client: "0xward.testnet".parse().unwrap(),
                 amount: U128(50_000_000_000_000_000_000_000),
                 description: "Design work, Framework, Testing".to_string(),
-                status: InvoiceStatus::Pending,
-                released: false,
+                status: InvoiceStatus::Paid,
+                released: true,
                 created_at: 1_794_021_148_914_561_684,
-                paid_at: None,
+                paid_at: Some(1_794_021_148_914_561_684),
                 external_ref: None,
                 due_date: Some(1_795_230_748_914_561_684),
                 disputed: false,
                 dispute_reason: None,
+                currency: Currency::Near,
+                items: vec![],
+                tax_rate_bps: 0,
+                subtotal: U128(50_000_000_000_000_000_000_000),
+                tax_amount: U128(0),
             },
         );
-        let old = OldContract {
+        invoices.insert(
+            2,
+            Invoice {
+                id: 2,
+                seller: contract_acct(),
+                client: "0xward.testnet".parse().unwrap(),
+                amount: U128(1_010_000_000_000_000_000_000_000),
+                description: "Retainer".to_string(),
+                status: InvoiceStatus::Pending,
+                released: false,
+                created_at: 1_794_040_000_000_000_000,
+                paid_at: None,
+                external_ref: None,
+                due_date: Some(1_795_000_000_000_000_000),
+                disputed: false,
+                dispute_reason: None,
+                currency: Currency::Near,
+                items: vec![],
+                tax_rate_bps: 0,
+                subtotal: U128(1_010_000_000_000_000_000_000_000),
+                tax_amount: U128(0),
+            },
+        );
+        invoices.insert(
+            3,
+            Invoice {
+                id: 3,
+                seller: contract_acct(),
+                client: "0xward.testnet".parse().unwrap(),
+                amount: U128(10_000_000_000_000_000_000_000),
+                description: "Testing 2".to_string(),
+                status: InvoiceStatus::Pending,
+                released: false,
+                created_at: 1_794_050_000_000_000_000,
+                paid_at: None,
+                external_ref: None,
+                due_date: Some(1_795_010_000_000_000_000),
+                disputed: false,
+                dispute_reason: None,
+                currency: Currency::Near,
+                items: vec![],
+                tax_rate_bps: 0,
+                subtotal: U128(10_000_000_000_000_000_000_000),
+                tax_amount: U128(0),
+            },
+        );
+        invoices.insert(
+            4,
+            Invoice {
+                id: 4,
+                seller: contract_acct(),
+                client: "0xward.testnet".parse().unwrap(),
+                amount: U128(10_000_000_000_000_000_000_000),
+                description: "Testing 3".to_string(),
+                status: InvoiceStatus::Pending,
+                released: false,
+                created_at: 1_794_059_451_923_263_766,
+                paid_at: None,
+                external_ref: None,
+                due_date: Some(1_795_269_051_923_263_766),
+                disputed: false,
+                dispute_reason: None,
+                currency: Currency::Near,
+                items: vec![],
+                tax_rate_bps: 0,
+                subtotal: U128(10_000_000_000_000_000_000_000),
+                tax_amount: U128(0),
+            },
+        );
+        let mut policies: LookupMap<AccountId, Policy> = LookupMap::new(b"p");
+        policies.insert(
+            "0xward.testnet".parse().unwrap(),
+            Policy {
+                max_amount: U128(5_000_000_000_000_000_000_000_000),
+                allowed_sellers: vec![contract_acct()],
+                max_total_per_day: U128(10_000_000_000_000_000_000_000_000),
+                daily_spent: U128(1_000_000_000_000_000_000_000_000),
+                daily_spent_day: 20_761,
+            },
+        );
+        let mut meta_nonces: LookupMap<AccountId, u64> = LookupMap::new(b"m");
+        meta_nonces.insert(alice(), 3);
+        let mut open_pending_count: LookupMap<AccountId, u64> = LookupMap::new(b"o");
+        open_pending_count.insert(contract_acct(), 3);
+        let old = OldContractV3 {
             owner: contract_acct(),
-            next_invoice_id: 2,
+            next_invoice_id: 5,
             invoices,
-            policies: LookupMap::new(b"p"),
-            relayer: None,
-            meta_nonces: LookupMap::new(b"m"),
+            policies,
+            relayer: Some(contract_acct()),
+            meta_nonces,
             pending_transfers: LookupMap::new(b"t"),
             failed_transfers: LookupMap::new(b"f"),
-            open_pending_count: LookupMap::new(b"o"),
+            open_pending_count,
             total_escrowed: 0,
             pending_owner: None,
         };
@@ -2242,96 +2443,916 @@ mod tests {
     }
 
     #[test]
-    fn migrate_v1_state_with_live_invoice_1() {
+    fn migrate_v3_state_with_live_invoices() {
         set_predecessor(contract_acct());
-        write_v1_state_with_live_invoice_1();
+        write_v3_state_with_live_invoices();
         let mut c = Contract::migrate();
-        assert_eq!(c.get_version(), 3);
+        assert_eq!(c.get_version(), 4);
         assert_eq!(c.get_owner(), contract_acct());
-        assert_eq!(c.get_invoice_count(), 1);
-        let inv = c.get_invoice(1).unwrap();
-        // Every v1 field identical to the live invoice #1.
-        assert_eq!(inv.id, 1);
-        assert_eq!(inv.seller, contract_acct());
-        assert_eq!(inv.client, "0xward.testnet".parse::<AccountId>().unwrap());
-        assert_eq!(inv.amount, U128(50_000_000_000_000_000_000_000));
-        assert_eq!(inv.description, "Design work, Framework, Testing");
-        assert_eq!(inv.status, InvoiceStatus::Pending);
-        assert!(!inv.released);
-        assert_eq!(inv.created_at, 1_794_021_148_914_561_684);
-        assert_eq!(inv.paid_at, None);
-        assert_eq!(inv.external_ref, None);
-        assert_eq!(inv.due_date, Some(1_795_230_748_914_561_684));
-        assert!(!inv.disputed);
-        assert_eq!(inv.dispute_reason, None);
-        // New v2 fields.
-        assert_eq!(inv.currency, Currency::Near);
-        assert!(inv.items.is_empty());
-        assert_eq!(inv.tax_rate_bps, 0);
-        assert_eq!(inv.subtotal, U128(50_000_000_000_000_000_000_000));
-        assert_eq!(inv.tax_amount, U128(0));
-        // New invoices work after migration (next id is 2): line
-        // items + tax, then a USDC invoice.
+        assert_eq!(c.get_invoice_count(), 4);
+        assert_eq!(c.get_relayer(), Some(contract_acct()));
+        assert_eq!(c.get_total_escrowed(), U128(0));
+        // Invoice #1: live-exact, Paid + released.
+        let inv1 = c.get_invoice(1).unwrap();
+        assert_eq!(inv1.seller, contract_acct());
+        assert_eq!(inv1.client, "0xward.testnet".parse::<AccountId>().unwrap());
+        assert_eq!(inv1.amount, U128(50_000_000_000_000_000_000_000));
+        assert_eq!(inv1.description, "Design work, Framework, Testing");
+        assert_eq!(inv1.status, InvoiceStatus::Paid);
+        assert!(inv1.released);
+        assert_eq!(inv1.created_at, 1_794_021_148_914_561_684);
+        assert_eq!(inv1.currency, Currency::Near);
+        // Invoices #2-#4 survive, Pending, unreleased.
+        for id in 2..=4 {
+            let inv = c.get_invoice(id).unwrap();
+            assert_eq!(inv.status, InvoiceStatus::Pending);
+            assert!(!inv.released);
+        }
+        assert_eq!(c.get_invoice(2).unwrap().amount, U128(1_010_000_000_000_000_000_000_000));
+        assert_eq!(c.get_invoice(3).unwrap().description, "Testing 2");
+        let inv4 = c.get_invoice(4).unwrap();
+        assert_eq!(inv4.description, "Testing 3");
+        assert_eq!(inv4.created_at, 1_794_059_451_923_263_766);
+        assert_eq!(inv4.due_date, Some(1_795_269_051_923_263_766));
+        // The v3 NEAR policy survives byte-identical, including its
+        // daily accounting.
+        let policy = c
+            .get_policy("0xward.testnet".parse().unwrap())
+            .unwrap();
+        assert_eq!(policy.max_amount, U128(5_000_000_000_000_000_000_000_000));
+        assert_eq!(policy.allowed_sellers, vec![contract_acct()]);
+        assert_eq!(policy.daily_spent, U128(1_000_000_000_000_000_000_000_000));
+        assert_eq!(policy.daily_spent_day, 20_761);
+        // No USDC policy existed in v3: the new map starts empty.
+        assert_eq!(
+            c.get_usdc_policy("0xward.testnet".parse().unwrap()),
+            None
+        );
+        // Meta nonce survives: a replay of nonce 3 must fail, and
+        // nonce 4 (the next one) is the live one.
+        assert_eq!(c.get_meta_nonce(alice()), 3);
+        assert_eq!(c.get_open_invoice_count(contract_acct()), 3);
+        // New invoices work after migration (next id is 5): a USDC
+        // invoice, then set USDC caps and confirm it.
         set_predecessor(alice());
         let id = c.create_invoice(
             bob(),
-            U128(220),
-            "post-migrate".to_string(),
-            None,
-            Currency::Near,
-            vec![line_item("A", 2, 100)],
-            1000,
-        );
-        assert_eq!(id, 2);
-        let id2 = c.create_invoice(
-            bob(),
             U128(10_000_000),
-            "usdc".to_string(),
+            "post-migrate usdc".to_string(),
             None,
             Currency::Usdc,
             vec![],
             0,
         );
-        assert_eq!(id2, 3);
-        assert_eq!(c.get_invoice_count(), 3);
+        assert_eq!(id, 5);
+        assert_eq!(c.get_invoice_count(), 5);
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(50_000_000), U128(100_000_000));
+        let usdc = c.get_usdc_policy(bob()).unwrap();
+        assert_eq!(usdc.max_amount, U128(50_000_000));
+        assert_eq!(usdc.max_total_per_day, U128(100_000_000));
     }
 
     #[test]
     #[should_panic(expected = "only the owner can migrate")]
     fn migrate_rejects_non_owner() {
         set_predecessor(alice());
-        write_v1_state_with_live_invoice_1();
+        write_v3_state_with_live_invoices();
         Contract::migrate();
     }
 
     #[test]
     fn migrate_twice_panics_without_damaging_state() {
         set_predecessor(contract_acct());
-        write_v1_state_with_live_invoice_1();
+        write_v3_state_with_live_invoices();
         let c = Contract::migrate();
-        assert_eq!(c.get_version(), 3);
-        // End of the first migrate "call": dropping the returned
-        // contract flushes its maps to storage, exactly as the
-        // on-chain wrapper does at the end of a transaction. Only now
-        // do the v2 invoice bytes actually land in storage — without
-        // this drop the second migrate would still see v1 bytes.
+        assert_eq!(c.get_version(), 4);
+        // End of the first migrate "call": on-chain, the wrapper
+        // writes the returned v4 state back to storage. In a unit
+        // test that write does not happen automatically — and unlike
+        // the v1->v2 migrate, v4 rewrites NO map values, so dropping
+        // the contract would flush nothing either. Write the v4 state
+        // explicitly, exactly as the on-chain wrapper does.
+        env::state_write(&c);
         drop(c);
-        // Second migrate must panic: a v2 invoice no longer decodes
-        // as OldInvoice (Borsh rejects the trailing bytes).
+        // Second migrate must panic: a v4 state blob no longer
+        // deserializes as OldContractV3 (Borsh rejects the trailing
+        // bytes of the appended usdc_policies field).
         let second = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             Contract::migrate();
         }));
         assert!(second.is_err());
         // State undamaged: the contract still reads back from storage
-        // with invoice #1 intact.
+        // with all four invoices intact.
         let c2: Contract = env::state_read().expect("state should still exist");
+        assert_eq!(c2.get_version(), 4);
+        assert_eq!(c2.get_invoice_count(), 4);
         let inv = c2.get_invoice(1).unwrap();
         assert_eq!(inv.amount, U128(50_000_000_000_000_000_000_000));
         assert_eq!(inv.description, "Design work, Framework, Testing");
-        assert_eq!(inv.status, InvoiceStatus::Pending);
+        assert_eq!(inv.status, InvoiceStatus::Paid);
         assert_eq!(inv.currency, Currency::Near);
-        assert_eq!(c2.get_invoice_count(), 1);
+        assert_eq!(c2.get_invoice(4).unwrap().description, "Testing 3");
         assert_eq!(c2.get_owner(), contract_acct());
-        assert_eq!(c2.get_version(), 3);
+        assert_eq!(c2.get_relayer(), Some(contract_acct()));
+    }
+
+    // ---- v4: adversarial / conformance tests (ala Veto) ----
+
+    #[test]
+    #[should_panic(expected = "amount must be greater than zero")]
+    fn create_invoice_rejects_zero_amount() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(0), "free?".to_string(), None, Currency::Near, vec![], 0);
+    }
+
+    #[test]
+    fn create_invoice_description_boundary() {
+        let mut c = setup(alice());
+        // Exactly 500 bytes is accepted.
+        let ok = "d".repeat(500);
+        let id = c.create_invoice(bob(), U128(100), ok, None, Currency::Near, vec![], 0);
+        assert_eq!(id, 1);
+        // 501 bytes is refused.
+        let too_long = "d".repeat(501);
+        let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(100), too_long, None, Currency::Near, vec![], 0);
+        }));
+        assert!(rejected.is_err());
+    }
+
+    #[test]
+    fn create_invoice_twenty_line_items_ok() {
+        let mut c = setup(alice());
+        let items: Vec<InvoiceLineItem> =
+            (0..20).map(|i| line_item(&format!("item {}", i), 1, 100)).collect();
+        // 20 x 100 = 2000, no tax.
+        let id = c.create_invoice(bob(), U128(2_000), "max items".to_string(), None, Currency::Near, items, 0);
+        assert_eq!(id, 1);
+        assert_eq!(c.get_invoice(1).unwrap().items.len(), 20);
+    }
+
+    #[test]
+    #[should_panic(expected = "at most 20 line items")]
+    fn create_invoice_twenty_one_line_items_rejected() {
+        let mut c = setup(alice());
+        let items: Vec<InvoiceLineItem> =
+            (0..21).map(|i| line_item(&format!("item {}", i), 1, 100)).collect();
+        c.create_invoice(bob(), U128(2_100), "too many".to_string(), None, Currency::Near, items, 0);
+    }
+
+    #[test]
+    fn create_invoice_tax_boundaries() {
+        let mut c = setup(alice());
+        // 100% tax (10000 bps) is the legal maximum.
+        let items = vec![line_item("A", 1, 1_000)];
+        let id = c.create_invoice(
+            bob(),
+            U128(2_000),
+            "full tax".to_string(),
+            None,
+            Currency::Near,
+            items,
+            10_000,
+        );
+        assert_eq!(id, 1);
+        assert_eq!(c.get_invoice(1).unwrap().tax_amount, U128(1_000));
+        // 10001 bps is refused.
+        let items = vec![line_item("A", 1, 1_000)];
+        let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(
+                bob(),
+                U128(2_000),
+                "over tax".to_string(),
+                None,
+                Currency::Near,
+                items,
+                10_001,
+            );
+        }));
+        assert!(rejected.is_err());
+    }
+
+    #[test]
+    fn create_invoice_line_item_bounds() {
+        let mut c = setup(alice());
+        // Quantity 0 refused.
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(100), "q0".to_string(), None, Currency::Near, vec![line_item("A", 0, 100)], 0);
+        }));
+        assert!(bad.is_err());
+        // Quantity 10001 refused; 10000 is the max and works.
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(1_000_100), "q-big".to_string(), None, Currency::Near, vec![line_item("A", 10_001, 100)], 0);
+        }));
+        assert!(bad.is_err());
+        let id = c.create_invoice(bob(), U128(1_000_000), "q-max".to_string(), None, Currency::Near, vec![line_item("A", 10_000, 100)], 0);
+        assert_eq!(id, 1);
+        // Unit price 0 refused.
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(100), "p0".to_string(), None, Currency::Near, vec![line_item("A", 1, 0)], 0);
+        }));
+        assert!(bad.is_err());
+        // Line-item description 201 bytes refused.
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(100), "d-long".to_string(), None, Currency::Near, vec![line_item(&"x".repeat(201), 1, 100)], 0);
+        }));
+        assert!(bad.is_err());
+    }
+
+    #[test]
+    fn create_invoice_due_days_boundaries() {
+        let mut c = setup(alice());
+        // 1 and 90 days are the legal extremes.
+        let id1 = c.create_invoice(bob(), U128(100), "d1".to_string(), Some(1), Currency::Near, vec![], 0);
+        assert_eq!(c.get_invoice(id1).unwrap().due_date, Some(ONE_DAY_NS));
+        let id2 = c.create_invoice(bob(), U128(100), "d90".to_string(), Some(90), Currency::Near, vec![], 0);
+        assert_eq!(c.get_invoice(id2).unwrap().due_date, Some(90 * ONE_DAY_NS));
+        // 0 and 91 are refused.
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(100), "d0".to_string(), Some(0), Currency::Near, vec![], 0);
+        }));
+        assert!(bad.is_err());
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice(bob(), U128(100), "d91".to_string(), Some(91), Currency::Near, vec![], 0);
+        }));
+        assert!(bad.is_err());
+    }
+
+    #[test]
+    fn dispute_reason_length_boundary() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "a".to_string(), None, Currency::Near, vec![], 0);
+        c.create_invoice(bob(), U128(1_000), "b".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        pay_invoice_as(&mut c, 2, bob(), 1_000);
+        // Exactly 200 bytes is accepted.
+        set_predecessor(bob());
+        c.open_dispute(1, "r".repeat(200));
+        assert!(c.get_invoice(1).unwrap().disputed);
+        // 201 bytes is refused.
+        let bad = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.open_dispute(2, "r".repeat(201));
+        }));
+        assert!(bad.is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "invoice is not pending")]
+    fn double_pay_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "attached deposit must equal the invoice amount")]
+    fn pay_wrong_amount_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 999);
+    }
+
+    #[test]
+    #[should_panic(expected = "only the invoice client can pay")]
+    fn pay_by_non_client_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, carol(), 1_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "invoice is not paid")]
+    fn release_unpaid_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        c.release_invoice(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "invoice is not paid")]
+    fn release_after_refund_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(alice());
+        let _p = c.refund_invoice(1);
+        run_callback(&mut c, 1, PromiseResult::Successful(vec![]));
+        assert_eq!(c.get_invoice(1).unwrap().status, InvoiceStatus::Refunded);
+        // run_callback leaves the predecessor as the contract itself.
+        set_predecessor(alice());
+        c.release_invoice(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "funds already released")]
+    fn refund_after_release_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(alice());
+        let _p = c.release_invoice(1);
+        run_callback(&mut c, 1, PromiseResult::Successful(vec![]));
+        assert!(c.get_invoice(1).unwrap().released);
+        // run_callback leaves the predecessor as the contract itself.
+        set_predecessor(alice());
+        c.refund_invoice(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "only a paid invoice can be disputed")]
+    fn dispute_unpaid_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        set_predecessor(bob());
+        c.open_dispute(1, "too early".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "invoice is already disputed")]
+    fn dispute_twice_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(bob());
+        c.open_dispute(1, "first".to_string());
+        c.open_dispute(1, "second".to_string());
+    }
+
+    #[test]
+    #[should_panic(expected = "invoice is not disputed")]
+    fn withdraw_dispute_without_dispute_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(bob());
+        c.withdraw_dispute(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "only the client can claim")]
+    fn claim_refund_by_non_client_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), Some(14), Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_time(carol(), 15 * ONE_DAY_NS);
+        c.claim_refund(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "funds already released")]
+    fn claim_refund_after_release_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), Some(14), Currency::Near, vec![], 0);
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(alice());
+        let _p = c.release_invoice(1);
+        run_callback(&mut c, 1, PromiseResult::Successful(vec![]));
+        set_time(bob(), 15 * ONE_DAY_NS);
+        c.claim_refund(1);
+    }
+
+    #[test]
+    #[should_panic(expected = "only a pending invoice can be cancelled")]
+    fn cancel_twice_rejected() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "work".to_string(), None, Currency::Near, vec![], 0);
+        c.cancel_invoice(1);
+        c.cancel_invoice(1);
+    }
+
+    #[test]
+    fn confirm_external_payment_edges() {
+        let mut c = setup(alice());
+        // A 66-char tx hash reference is accepted (not just the 42-char
+        // deposit address).
+        c.create_invoice(bob(), U128(1_000), "hash-ref".to_string(), None, Currency::Near, vec![], 0);
+        c.confirm_external_payment(1, format!("0x{}", "ab".repeat(32)));
+        assert_eq!(c.get_invoice(1).unwrap().status, InvoiceStatus::Paid);
+        // Confirming the same invoice twice is refused.
+        let twice = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.confirm_external_payment(1, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
+        }));
+        assert!(twice.is_err());
+        // A cancelled invoice cannot be confirmed either.
+        c.create_invoice(bob(), U128(1_000), "cancelled".to_string(), None, Currency::Near, vec![], 0);
+        c.cancel_invoice(2);
+        let cancelled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.confirm_external_payment(2, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
+        }));
+        assert!(cancelled.is_err());
+    }
+
+    #[test]
+    fn meta_nonce_gap_ok() {
+        let mut c = setup(contract_acct());
+        c.set_relayer(Some(relayer_acct()));
+        set_predecessor(relayer_acct());
+        // A nonce that skips ahead (gap) is accepted — the contract
+        // only requires strictly increasing nonces.
+        let (sig, pk, nonce_b64) = signed_meta_args(alice(), bob(), 100, "gasless", 5);
+        let id = c.create_invoice_meta(alice(), bob(), U128(100), "gasless".to_string(), 5, sig, pk, nonce_b64, None);
+        assert_eq!(id, 1);
+        assert_eq!(c.get_meta_nonce(alice()), 5);
+        // But a lower (already used) nonce is rejected.
+        let (sig, pk, nonce_b64) = signed_meta_args(alice(), bob(), 100, "gasless", 3);
+        let lower = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.create_invoice_meta(alice(), bob(), U128(100), "gasless".to_string(), 3, sig, pk, nonce_b64, None);
+        }));
+        assert!(lower.is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "NEP-413 signature verification failed")]
+    fn meta_signature_for_other_seller_rejected() {
+        let mut c = setup(contract_acct());
+        c.set_relayer(Some(relayer_acct()));
+        set_predecessor(relayer_acct());
+        // Signed by alice's key for an alice invoice, but submitted
+        // as carol's invoice: the signature must not transfer.
+        let (sig, pk, nonce_b64) = signed_meta_args(alice(), bob(), 100, "gasless", 1);
+        c.create_invoice_meta(carol(), bob(), U128(100), "gasless".to_string(), 1, sig, pk, nonce_b64, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "no relayer configured")]
+    fn meta_rejected_after_relayer_cleared() {
+        let mut c = setup(contract_acct());
+        c.set_relayer(Some(relayer_acct()));
+        c.set_relayer(None);
+        set_predecessor(relayer_acct());
+        let (sig, pk, nonce_b64) = signed_meta_args(alice(), bob(), 100, "gasless", 1);
+        c.create_invoice_meta(alice(), bob(), U128(100), "gasless".to_string(), 1, sig, pk, nonce_b64, None);
+    }
+
+    #[test]
+    #[should_panic(expected = "amount exceeds client spend-guard limit")]
+    fn meta_enforces_spend_guard() {
+        let mut c = setup(contract_acct());
+        c.set_relayer(Some(relayer_acct()));
+        // Bob caps NEAR invoices at 500; a gasless 1000 invoice for
+        // bob must be refused the same way a direct one would be.
+        set_predecessor(bob());
+        c.set_policy(U128(500), vec![], U128(0), U128(0), U128(0));
+        set_predecessor(relayer_acct());
+        let (sig, pk, nonce_b64) = signed_meta_args(alice(), bob(), 1_000, "gasless", 1);
+        c.create_invoice_meta(alice(), bob(), U128(1_000), "gasless".to_string(), 1, sig, pk, nonce_b64, None);
+    }
+
+    #[test]
+    fn daily_cap_exact_boundary() {
+        let mut c = setup(alice());
+        c.create_invoice(bob(), U128(1_000), "a".to_string(), None, Currency::Near, vec![], 0);
+        c.create_invoice(bob(), U128(1_000), "b".to_string(), None, Currency::Near, vec![], 0);
+        c.create_invoice(bob(), U128(1), "c".to_string(), None, Currency::Near, vec![], 0);
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(2_000), U128(0), U128(0));
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        pay_invoice_as(&mut c, 2, bob(), 1_000);
+        // Exactly at the cap (2000/2000) is fine; one yocto more is not.
+        assert_eq!(c.get_policy(bob()).unwrap().daily_spent, U128(2_000));
+        let over = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            pay_invoice_as(&mut c, 3, bob(), 1);
+        }));
+        assert!(over.is_err());
+    }
+
+    #[test]
+    fn owner_transfer_edges() {
+        let mut c = setup(contract_acct());
+        // Proposing yourself as the new owner is refused.
+        let same = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.propose_owner(contract_acct());
+        }));
+        assert!(same.is_err());
+        // A non-owner cannot propose.
+        set_predecessor(alice());
+        let non_owner = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.propose_owner(carol());
+        }));
+        assert!(non_owner.is_err());
+        // Accepting with no proposal outstanding is refused.
+        set_predecessor(carol());
+        let no_proposal = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.accept_owner();
+        }));
+        assert!(no_proposal.is_err());
+    }
+
+    #[test]
+    fn get_invoice_missing_and_list_pagination() {
+        let mut c = setup(alice());
+        assert_eq!(c.get_invoice(999), None);
+        assert!(c.list_invoices(1, 10).is_empty());
+        for i in 0..3 {
+            c.create_invoice(
+                bob(),
+                U128(100),
+                format!("inv {}", i),
+                None,
+                Currency::Near,
+                vec![],
+                0,
+            );
+        }
+        assert_eq!(c.get_invoice(2).unwrap().description, "inv 1");
+        // from_index 0 is treated as 1.
+        let all = c.list_invoices(0, 10);
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].id, 1);
+        assert_eq!(all[2].id, 3);
+        let page = c.list_invoices(1, 2);
+        assert_eq!(page.len(), 2);
+        assert_eq!(page[0].id, 1);
+        assert_eq!(page[1].id, 2);
+        let tail = c.list_invoices(2, 10);
+        assert_eq!(tail.len(), 2);
+        assert_eq!(tail[0].id, 2);
+        // Past the end: empty, never panics.
+        assert!(c.list_invoices(4, 5).is_empty());
+        assert!(c.list_invoices(1, 0).is_empty());
+    }
+
+    #[test]
+    #[should_panic(expected = "contract state v3 not found")]
+    fn migrate_on_empty_state_panics() {
+        // No state was ever written in this context: migrate must
+        // refuse instead of initialising a blank contract over live
+        // data (a corrupted/missing state is never silently reset).
+        set_predecessor(contract_acct());
+        Contract::migrate();
+    }
+
+    #[test]
+    fn random_walk_invariants() {
+        // Deterministic 60-action walk (LCG, no rand dependency):
+        // create / pay / release / refund / cancel / dispute /
+        // withdraw / confirm-external, in random order. After every
+        // step the on-chain accounting must match a local model:
+        // total_escrowed == sum of Paid-but-unreleased amounts,
+        // open count == number of Pending invoices, and the invoice
+        // count only ever grows.
+        let mut c = setup(alice());
+        let mut rng: u64 = 0x9E3779B97F4A7C15;
+        let mut next_rand = |rng: &mut u64| -> u64 {
+            *rng = rng
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            *rng >> 33
+        };
+        struct Model {
+            status: InvoiceStatus,
+            released: bool,
+            disputed: bool,
+            amount: u128,
+        }
+        let mut model: Vec<Model> = Vec::new();
+        let addr_ref = "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string();
+        for _ in 0..60 {
+            match next_rand(&mut rng) % 8 {
+                0 => {
+                    // Create a NEAR invoice (keep headroom under the
+                    // 50-open cap so the walk never stalls).
+                    if c.get_open_invoice_count(alice()) < 10 {
+                        let amount = 1 + next_rand(&mut rng) % 1000;
+                        let due = if next_rand(&mut rng) % 2 == 0 {
+                            Some(14)
+                        } else {
+                            None
+                        };
+                        set_predecessor(alice());
+                        let id = c.create_invoice(
+                            bob(),
+                            U128(amount as u128),
+                            format!("walk {}", model.len()),
+                            due,
+                            Currency::Near,
+                            vec![],
+                            0,
+                        );
+                        assert_eq!(id as usize, model.len() + 1);
+                        model.push(Model {
+                            status: InvoiceStatus::Pending,
+                            released: false,
+                            disputed: false,
+                            amount: amount as u128,
+                        });
+                    }
+                }
+                1 => {
+                    // Pay a random pending invoice.
+                    let pend: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| m.status == InvoiceStatus::Pending)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !pend.is_empty() {
+                        let i = pend[(next_rand(&mut rng) as usize) % pend.len()];
+                        pay_invoice_as(&mut c, (i + 1) as u64, bob(), model[i].amount);
+                        model[i].status = InvoiceStatus::Paid;
+                    }
+                }
+                2 => {
+                    // Release a random paid, unreleased, undisputed
+                    // invoice; finalise via the mocked callback.
+                    let rel: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| {
+                            m.status == InvoiceStatus::Paid && !m.released && !m.disputed
+                        })
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !rel.is_empty() {
+                        let i = rel[(next_rand(&mut rng) as usize) % rel.len()];
+                        set_predecessor(alice());
+                        let _p = c.release_invoice((i + 1) as u64);
+                        run_callback(&mut c, (i + 1) as u64, PromiseResult::Successful(vec![]));
+                        model[i].released = true;
+                    }
+                }
+                3 => {
+                    // Refund a random paid, unreleased invoice.
+                    let rf: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| m.status == InvoiceStatus::Paid && !m.released)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !rf.is_empty() {
+                        let i = rf[(next_rand(&mut rng) as usize) % rf.len()];
+                        set_predecessor(alice());
+                        let _p = c.refund_invoice((i + 1) as u64);
+                        run_callback(&mut c, (i + 1) as u64, PromiseResult::Successful(vec![]));
+                        model[i].status = InvoiceStatus::Refunded;
+                    }
+                }
+                4 => {
+                    // Cancel a random pending invoice.
+                    let pend: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| m.status == InvoiceStatus::Pending)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !pend.is_empty() {
+                        let i = pend[(next_rand(&mut rng) as usize) % pend.len()];
+                        set_predecessor(alice());
+                        c.cancel_invoice((i + 1) as u64);
+                        model[i].status = InvoiceStatus::Cancelled;
+                    }
+                }
+                5 => {
+                    // Dispute a random paid, unreleased, undisputed invoice.
+                    let d: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| {
+                            m.status == InvoiceStatus::Paid && !m.released && !m.disputed
+                        })
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !d.is_empty() {
+                        let i = d[(next_rand(&mut rng) as usize) % d.len()];
+                        set_predecessor(bob());
+                        c.open_dispute((i + 1) as u64, "walk dispute".to_string());
+                        model[i].disputed = true;
+                    }
+                }
+                6 => {
+                    // Withdraw a random open dispute.
+                    let w: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| m.disputed)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !w.is_empty() {
+                        let i = w[(next_rand(&mut rng) as usize) % w.len()];
+                        set_predecessor(bob());
+                        c.withdraw_dispute((i + 1) as u64);
+                        model[i].disputed = false;
+                    }
+                }
+                _ => {
+                    // Confirm external settlement for a random pending
+                    // invoice (NEAR invoices only in this walk).
+                    let pend: Vec<usize> = model
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, m)| m.status == InvoiceStatus::Pending)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !pend.is_empty() {
+                        let i = pend[(next_rand(&mut rng) as usize) % pend.len()];
+                        set_predecessor(alice());
+                        c.confirm_external_payment((i + 1) as u64, addr_ref.clone());
+                        model[i].status = InvoiceStatus::Paid;
+                        model[i].released = true;
+                    }
+                }
+            }
+            // Invariants after every single step.
+            let expected_escrow: u128 = model
+                .iter()
+                .filter(|m| m.status == InvoiceStatus::Paid && !m.released)
+                .map(|m| m.amount)
+                .sum();
+            assert_eq!(
+                c.get_total_escrowed(),
+                U128(expected_escrow),
+                "escrow invariant broke"
+            );
+            let expected_open = model
+                .iter()
+                .filter(|m| m.status == InvoiceStatus::Pending)
+                .count() as u64;
+            assert_eq!(
+                c.get_open_invoice_count(alice()),
+                expected_open,
+                "open-count invariant broke"
+            );
+            assert_eq!(
+                c.get_invoice_count(),
+                model.len() as u64,
+                "invoice count must only grow"
+            );
+        }
+        // The walk must actually have exercised the contract.
+        assert!(model.len() >= 5, "walk created too few invoices: {}", model.len());
+        assert!(
+            model.iter().any(|m| m.status == InvoiceStatus::Paid),
+            "walk never paid an invoice"
+        );
+        assert!(
+            model.iter().any(|m| m.status == InvoiceStatus::Refunded),
+            "walk never refunded an invoice"
+        );
+    }
+
+    // ---- v4: USDC spend-guard caps ----
+
+    #[test]
+    #[should_panic(expected = "amount exceeds client USDC spend-guard limit")]
+    fn usdc_max_amount_enforced_at_creation() {
+        let mut c = setup(bob());
+        // Bob caps USDC invoices at 5.00 USDC (5_000_000 micro-USDC).
+        c.set_policy(U128(0), vec![], U128(0), U128(5_000_000), U128(0));
+        set_predecessor(alice());
+        c.create_invoice(
+            bob(),
+            U128(10_000_000),
+            "too big usdc".to_string(),
+            None,
+            Currency::Usdc,
+            vec![],
+            0,
+        );
+    }
+
+    #[test]
+    fn usdc_max_amount_boundary_ok() {
+        let mut c = setup(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(5_000_000), U128(0));
+        set_predecessor(alice());
+        // Exactly at the cap is allowed.
+        let id = c.create_invoice(
+            bob(),
+            U128(5_000_000),
+            "at cap".to_string(),
+            None,
+            Currency::Usdc,
+            vec![],
+            0,
+        );
+        assert_eq!(id, 1);
+    }
+
+    #[test]
+    fn usdc_daily_cap_enforced_at_confirmation() {
+        let mut c = setup(alice());
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(0), U128(15_000_000));
+        set_predecessor(alice());
+        c.create_invoice(bob(), U128(10_000_000), "a".to_string(), None, Currency::Usdc, vec![], 0);
+        c.create_invoice(bob(), U128(10_000_000), "b".to_string(), None, Currency::Usdc, vec![], 0);
+        let addr = "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string();
+        c.confirm_external_payment(1, addr.clone());
+        assert_eq!(c.get_usdc_policy(bob()).unwrap().daily_spent, U128(10_000_000));
+        // 10M + 10M = 20M > 15M/day: the second confirmation is refused.
+        let over = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.confirm_external_payment(2, addr);
+        }));
+        assert!(over.is_err());
+        // The refused invoice is still Pending, and the accounting
+        // still shows only the first 10M.
+        assert_eq!(c.get_invoice(2).unwrap().status, InvoiceStatus::Pending);
+        assert_eq!(c.get_usdc_policy(bob()).unwrap().daily_spent, U128(10_000_000));
+    }
+
+    #[test]
+    fn usdc_daily_cap_resets_next_day() {
+        let mut c = setup(alice());
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(0), U128(15_000_000));
+        set_predecessor(alice());
+        c.create_invoice(bob(), U128(10_000_000), "a".to_string(), None, Currency::Usdc, vec![], 0);
+        c.create_invoice(bob(), U128(10_000_000), "b".to_string(), None, Currency::Usdc, vec![], 0);
+        let addr = "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string();
+        c.confirm_external_payment(1, addr.clone());
+        // Next UTC day the quota resets and the same confirmation works.
+        set_time(alice(), ONE_DAY_NS);
+        c.confirm_external_payment(2, addr);
+        assert_eq!(c.get_invoice(2).unwrap().status, InvoiceStatus::Paid);
+        assert_eq!(c.get_usdc_policy(bob()).unwrap().daily_spent, U128(10_000_000));
+        assert_eq!(c.get_usdc_policy(bob()).unwrap().daily_spent_day, 1);
+    }
+
+    #[test]
+    fn confirm_external_rechecks_allowlist_and_max() {
+        let mut c = setup(alice());
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![alice()], U128(0), U128(20_000_000), U128(0));
+        set_predecessor(alice());
+        c.create_invoice(bob(), U128(10_000_000), "usdc".to_string(), None, Currency::Usdc, vec![], 0);
+        let addr = "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string();
+        // Bob tightens the policy AFTER creation: alice is removed
+        // from the allowlist. Confirmation must use the CURRENT policy.
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![carol()], U128(0), U128(20_000_000), U128(0));
+        set_predecessor(alice());
+        let blocked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.confirm_external_payment(1, addr.clone());
+        }));
+        assert!(blocked.is_err());
+        // Bob re-allowlists alice but lowers the USDC cap below the
+        // invoice amount: still refused.
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![alice()], U128(0), U128(5_000_000), U128(0));
+        set_predecessor(alice());
+        let blocked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.confirm_external_payment(1, addr);
+        }));
+        assert!(blocked.is_err());
+        assert_eq!(c.get_invoice(1).unwrap().status, InvoiceStatus::Pending);
+    }
+
+    #[test]
+    fn set_policy_stores_usdc_caps_and_preserves_daily_spent() {
+        let mut c = setup(alice());
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(50_000_000), U128(100_000_000));
+        set_predecessor(alice());
+        c.create_invoice(bob(), U128(10_000_000), "usdc".to_string(), None, Currency::Usdc, vec![], 0);
+        c.confirm_external_payment(1, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
+        // Edit the settings: USDC daily accounting must survive, like
+        // the NEAR accounting does (M-03).
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(60_000_000), U128(100_000_000));
+        let usdc = c.get_usdc_policy(bob()).unwrap();
+        assert_eq!(usdc.max_amount, U128(60_000_000));
+        assert_eq!(usdc.max_total_per_day, U128(100_000_000));
+        assert_eq!(usdc.daily_spent, U128(10_000_000));
+        assert_eq!(usdc.daily_spent_day, 0);
+    }
+
+    #[test]
+    fn confirm_near_invoice_without_usdc_policy_still_works() {
+        // No regression: a NEAR invoice confirmed externally works
+        // exactly as in v3 when no USDC policy exists at all.
+        let mut c = setup(alice());
+        assert_eq!(c.get_usdc_policy(bob()), None);
+        c.create_invoice(bob(), U128(1_000), "near".to_string(), None, Currency::Near, vec![], 0);
+        c.confirm_external_payment(1, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
+        let inv = c.get_invoice(1).unwrap();
+        assert_eq!(inv.status, InvoiceStatus::Paid);
+        assert!(inv.released);
+    }
+
+    #[test]
+    fn usdc_cap_zero_means_no_limit() {
+        // All-zero USDC caps = no limits: a large USDC invoice can be
+        // created and confirmed freely.
+        let mut c = setup(alice());
+        set_predecessor(bob());
+        c.set_policy(U128(0), vec![], U128(0), U128(0), U128(0));
+        set_predecessor(alice());
+        c.create_invoice(bob(), U128(25_000_000), "big usdc".to_string(), None, Currency::Usdc, vec![], 0);
+        c.confirm_external_payment(1, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
+        assert_eq!(c.get_invoice(1).unwrap().status, InvoiceStatus::Paid);
+        // Zero caps still record the spend (accounting runs even when
+        // the cap itself is unlimited).
+        assert_eq!(c.get_usdc_policy(bob()).unwrap().daily_spent, U128(25_000_000));
+    }
+
+    #[test]
+    fn get_usdc_policy_none_by_default() {
+        let c = setup(alice());
+        assert_eq!(c.get_usdc_policy(alice()), None);
+        assert_eq!(c.get_usdc_policy(bob()), None);
+        assert_eq!(c.get_policy(bob()), None);
     }
 }
+
