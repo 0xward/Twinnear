@@ -7,6 +7,7 @@ import {
   getOwner,
   getSignedInAccount,
   isContractDeployed,
+  onAccountChange,
 } from "../lib/near";
 import { CONTRACT_ID, EXPECTED_WASM_SHA256, EXPLORER_URL } from "../lib/config";
 
@@ -75,6 +76,22 @@ export default function Deploy() {
   useEffect(() => {
     check();
   }, [check]);
+
+  useEffect(() => {
+    // Follow wallet account changes (connect / switch / sign out) live,
+    // like the header does. Without this the page only knows the account
+    // from its first load and tells an already-connected wallet to
+    // "connect first".
+    let unsubscribe: (() => void) | null = null;
+    onAccountChange((acct) => setAccount(acct))
+      .then((unsub) => {
+        unsubscribe = unsub;
+      })
+      .catch(() => undefined);
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

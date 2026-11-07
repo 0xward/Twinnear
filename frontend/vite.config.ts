@@ -3,6 +3,11 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Some wallet-selector / near-api-js code references Node's `global`.
+    // Point it at `globalThis` so those paths work in the browser.
+    global: "globalThis",
+  },
   resolve: {
     // L-02: wallet-selector / near-api-js dependencies import Node's
     // `buffer` and `util`. Without these aliases Vite externalises them
