@@ -5,6 +5,9 @@ import WalletButton from "./components/WalletButton";
 // Route pages are lazy-loaded so the initial bundle stays small; the
 // heavy NEAR libraries live in lib/near.ts behind dynamic import().
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const About = lazy(() => import("./pages/About"));
+const Docs = lazy(() => import("./pages/Docs"));
+const Faq = lazy(() => import("./pages/Faq"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const NewInvoice = lazy(() => import("./pages/NewInvoice"));
 const PayInvoice = lazy(() => import("./pages/PayInvoice"));
@@ -42,6 +45,9 @@ export default function App() {
         <NavLink to="/recurring">Retainers</NavLink>
         <NavLink to="/portal">Client portal</NavLink>
         <NavLink to="/settings">Spend guard</NavLink>
+        <NavLink to="/about">About</NavLink>
+        <NavLink to="/docs">Docs</NavLink>
+        <NavLink to="/faq">FAQ</NavLink>
       </nav>
 
       <Suspense fallback={<PageFallback />}>
@@ -53,6 +59,9 @@ export default function App() {
           <Route path="/portal" element={<Portal />} />
           <Route path="/pay/:id" element={<PayInvoice />} />
           <Route path="/settings" element={<PolicyPage />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/docs" element={<Docs />} />
+          <Route path="/faq" element={<Faq />} />
           <Route
             path="*"
             element={
@@ -71,7 +80,8 @@ export default function App() {
         Twinnear is a port of TwinPayAI (Stacks) to NEAR. Only the NEAR
         integration is new. Testnet only. Contract twinnear.testnet ·
         schema v2.{" "}
-        <Link to="/">Ledger</Link> ·{" "}
+        <Link to="/about">About</Link> · <Link to="/docs">Docs</Link> ·{" "}
+        <Link to="/faq">FAQ</Link> · <Link to="/">Ledger</Link> ·{" "}
         <a
           href="https://github.com/0xward/Twinnear"
           target="_blank"

@@ -295,6 +295,33 @@ export default function PayInvoice() {
         )}
       </div>
 
+      {invoice.status === "Pending" && (isClient || !account) && (
+        <div className="notice" aria-label="For the client">
+          <strong>For the client.</strong>{" "}
+          {isUsdc ? (
+            <>
+              This is a USDC invoice. Your payment goes straight to the
+              seller through 1Click, with no escrow. Pay one only if you
+              trust the seller.{" "}
+            </>
+          ) : (
+            <>
+              Your money waits in the middle. When you pay, the exact
+              amount is held by the contract in escrow, not by the
+              seller, and it is released only when the seller releases
+              it, or refunded to you. If the work was not delivered,
+              open a dispute below: it blocks the release. If the due
+              date has passed and the seller stays silent, you can
+              claim the refund yourself.{" "}
+            </>
+          )}
+          <Link to="/docs#paying-an-invoice">
+            How paying works, step by step
+          </Link>
+          .
+        </div>
+      )}
+
       <dl className="kv">
         <dt>Amount due</dt>
         <dd className="amount" style={{ fontSize: 26 }}>

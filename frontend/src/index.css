@@ -982,6 +982,53 @@ table.ledger tfoot tr:last-child td {
   }
 }
 
+/* ---- trust strip (Ledger) ---- */
+.trust-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 18px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.trust-strip .stamp {
+  flex: none;
+}
+
+/* ---- guides / docs ---- */
+.guide {
+  scroll-margin-top: 12px;
+}
+
+.filed-under {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+.plain-list {
+  margin: 0 0 14px;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.plain-list li {
+  margin-bottom: 8px;
+}
+
+.plain-list li:last-child {
+  margin-bottom: 0;
+}
+
 /* ---- print: the ledger on paper ---- */
 @media print {
   body {

@@ -1,0 +1,72 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  formatNear,
+  getInvoiceCount,
+  getTotalEscrowed,
+  getVersion,
+} from "../lib/near";
+import { CONTRACT_ID, EXPLORER_URL } from "../lib/config";
+
+/**
+ * Trust strip: live on-chain facts, read with the view calls that
+ * already exist in lib/near.ts. Numbers are shown only when the view
+ * call succeeds; when it fails the strip stays up without numbers,
+ * never with invented ones.
+ */
+export default function TrustStrip() {
+  const [count, setCount] = useState<number | null>(null);
+  const [escrowed, setEscrowed] = useState<string | null>(null);
+  const [version, setVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    getInvoiceCount()
+      .then((n) => {
+        if (alive) setCount(n);
+      })
+      .catch(() => {});
+    getTotalEscrowed()
+      .then((v) => {
+        if (alive) setEscrowed(v);
+      })
+      .catch(() => {});
+    getVersion()
+      .then((v) => {
+        if (alive) setVersion(v);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <div className="trust-strip" aria-label="Live status">
+      <span className="stamp stamp-paid">Testnet</span>
+      <span>
+        Contract{" "}
+        <a
+          href={`${EXPLORER_URL}/accounts/${CONTRACT_ID}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {CONTRACT_ID}
+        </a>
+        {version !== null && ` · schema v${version}`}
+      </span>
+      {count !== null && (
+        <span>
+          {count} invoice{count === 1 ? "" : "s"} on chain
+        </span>
+      )}
+      {escrowed !== null && (
+        <span>{formatNear(escrowed)} Ⓝ in escrow now</span>
+      )}
+      <span>No fees. No signup. No custody.</span>
+      <span>
+        <Link to="/about">What is Twinnear?</Link>
+      </span>
+    </div>
+  );
+}

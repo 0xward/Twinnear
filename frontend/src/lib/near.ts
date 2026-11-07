@@ -1,5 +1,5 @@
 /**
- * NEAR connection layer: Wallet Selector (Meteor + OKX) for signing,
+ * NEAR connection layer: Wallet Selector (Meteor + OKX + Intear) for signing,
  * near-api-js JsonRpcProvider for read-only view calls.
  *
  * No keys are ever handled here — signing happens inside the user's wallet.
@@ -35,22 +35,41 @@ let modal: WalletSelectorModal | null = null;
 let provider: providers.JsonRpcProvider | null = null;
 
 async function loadSelectorDeps() {
-  const [{ setupWalletSelector }, { setupMeteorWallet }, { setupOKXWallet }] =
-    await Promise.all([
-      import("@near-wallet-selector/core"),
-      import("@near-wallet-selector/meteor-wallet"),
-      import("@near-wallet-selector/okx-wallet"),
-    ]);
-  return { setupWalletSelector, setupMeteorWallet, setupOKXWallet };
+  const [
+    { setupWalletSelector },
+    { setupMeteorWallet },
+    { setupOKXWallet },
+    { setupIntearWallet },
+  ] = await Promise.all([
+    import("@near-wallet-selector/core"),
+    import("@near-wallet-selector/meteor-wallet"),
+    import("@near-wallet-selector/okx-wallet"),
+    import("@near-wallet-selector/intear-wallet"),
+  ]);
+  return {
+    setupWalletSelector,
+    setupMeteorWallet,
+    setupOKXWallet,
+    setupIntearWallet,
+  };
 }
 
 export function getSelector(): Promise<WalletSelector> {
   if (!selectorPromise) {
     selectorPromise = loadSelectorDeps().then(
-      ({ setupWalletSelector, setupMeteorWallet, setupOKXWallet }) =>
+      ({
+        setupWalletSelector,
+        setupMeteorWallet,
+        setupOKXWallet,
+        setupIntearWallet,
+      }) =>
         setupWalletSelector({
           network: NETWORK_ID,
-          modules: [setupMeteorWallet(), setupOKXWallet()],
+          modules: [
+            setupMeteorWallet(),
+            setupOKXWallet(),
+            setupIntearWallet(),
+          ],
         }),
     );
   }

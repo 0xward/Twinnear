@@ -13,6 +13,7 @@ import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
 import FiatEstimate from "../components/FiatEstimate";
+import TrustStrip from "../components/TrustStrip";
 import type { Invoice } from "../lib/types";
 
 interface ClientTotal {
@@ -136,9 +137,12 @@ export default function Dashboard() {
         <h1>The ledger</h1>
         <p className="muted">
           What you have received, what is held in escrow, and what is still
-          owed to you, at a glance.
+          owed to you, at a glance. New here?{" "}
+          <Link to="/about">Read what Twinnear is</Link>.
         </p>
       </div>
+
+      <TrustStrip />
 
       <div className="stat-grid">
         <div className="stat">
