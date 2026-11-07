@@ -10,7 +10,7 @@
  */
 import { jsPDF } from "jspdf";
 import type { Invoice } from "./types";
-import { formatInvoiceAmount, formatNear, formatUsdc } from "./near";
+import { formatNear, formatUsdc } from "./near";
 import { formatDate } from "./near";
 import { invoiceRef } from "./invoiceRef";
 import { statusLabel } from "./invoiceStatus";
@@ -168,9 +168,15 @@ export function downloadInvoicePdf(inv: Invoice): void {
       false,
     );
   }
+  // Separator above the grand total. At this point y is the baseline the
+  // bold "Total due" row will use; 13pt bold glyphs reach ~9pt above
+  // their baseline, so a rule at y-6 struck straight through the text
+  // (strikethrough). Draw the rule between the rows with clear space on
+  // both sides instead.
   doc.setDrawColor(INK);
   doc.setLineWidth(1.2);
-  doc.line(labelX - 10, y - 6, right, y - 6);
+  doc.line(labelX - 10, y - 8, right, y - 8);
+  y += 10; // breathing room between the rule and the total row
   totalRow("Total due", money(inv, inv.amount), true);
   y += 8;
 
@@ -218,7 +224,12 @@ export function downloadInvoicePdf(inv: Invoice): void {
     M,
     footerY,
   );
-  doc.text(`Amount due: ${formatInvoiceAmount(inv)}`, right, footerY, {
+  // NOTE: do NOT use formatInvoiceAmount() here — it appends the "Ⓝ"
+  // glyph, which jsPDF's built-in Helvetica (WinAnsi) cannot encode:
+  // it renders as mojibake ("$Ã") and jsPDF mis-measures its width,
+  // so the right-aligned text overshot the margin and clipped.
+  // money() spells the currency out ("0.05 NEAR"), pure ASCII.
+  doc.text(`Amount due: ${money(inv, inv.amount)}`, right, footerY, {
     align: "right",
   });
 
