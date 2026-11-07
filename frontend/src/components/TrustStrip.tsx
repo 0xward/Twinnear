@@ -48,7 +48,7 @@ export default function TrustStrip() {
        * the claim and the links, so facts, claims, and links no
        * longer share one undifferentiated voice (P1). */}
       <div className="trust-facts">
-        <span className="stamp stamp-paid">Testnet</span>
+        <span className="stamp stamp-testnet">Testnet</span>
         <span>
           Contract{" "}
           <a

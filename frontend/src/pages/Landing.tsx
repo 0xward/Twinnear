@@ -151,7 +151,7 @@ export default function Landing() {
       </Reveal>
 
       <Reveal>
-        <section className="landing-section">
+        <section className="landing-section example-band">
           <p className="section-eyebrow">A real example</p>
           <h2 className="section-title">Invoice #1, as it happened.</h2>
           <p className="section-sub">

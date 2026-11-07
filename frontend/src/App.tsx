@@ -105,9 +105,8 @@ export default function App() {
       </Suspense>
 
       <footer className="footer">
-        Twinnear is a port of TwinPayAI (Stacks) to NEAR. Only the NEAR
-        integration is new. Testnet only. Contract twinnear.testnet ·
-        schema v4.{" "}
+        Freelancer invoicing on NEAR. Testnet only. Contract
+        twinnear.testnet · schema v4.{" "}
         <Link to="/about">About</Link> · <Link to="/docs">Docs</Link> ·{" "}
         <Link to="/faq">FAQ</Link> · <Link to="/ledger">Ledger</Link> ·{" "}
         <a

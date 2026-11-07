@@ -14,6 +14,17 @@
   --accent: #1f4d3a; /* deep ink green */
   --accent-soft: #e7efe9;
   --danger: #8a2f2a;
+  /* Colours taken from the logo wordmark (frontend/public/logo.svg):
+   * muted lavender, pale blue and teal, plus the cream paper tone.
+   * They are secondary accents only — the deep green stays the
+   * primary accent, so the eye always knows what is clickable. */
+  --logo-cream: #ece5d6;
+  --logo-lavender: #c0b5cb;
+  --logo-blue: #b1ced7;
+  --logo-teal: #3a6d7b;
+  --logo-slate: #3b4656;
+  --logo-lavender-soft: #efeaf2;
+  --logo-blue-soft: #e9f1f4;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 8px 24px rgba(28, 26, 23, 0.06);
   --serif: Georgia, "Times New Roman", Times, serif;
@@ -284,6 +295,14 @@ table.ledger tbody tr:hover {
   color: var(--danger);
   border-color: #d3a49f;
   background: #f9ecea;
+}
+
+/* The TESTNET label is not a payment status, so it does not wear the
+ * paid green — it wears the logo's muted lavender instead. */
+.stamp-testnet {
+  color: var(--logo-slate);
+  border-color: #c9bdd4;
+  background: var(--logo-lavender-soft);
 }
 
 /* ---- forms ---- */
@@ -1270,7 +1289,7 @@ table.ledger tfoot tr:last-child td {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--logo-teal);
   margin: 0 0 12px;
 }
 
@@ -1306,6 +1325,15 @@ table.ledger tfoot tr:last-child td {
   margin-top: 14px;
 }
 
+/* The real-example section sits on the logo's cream paper tone, so
+ * the one worked example on the page reads as a distinct panel. */
+.landing-section.example-band {
+  background: var(--logo-cream);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 28px 28px 24px;
+}
+
 /* A landing section is a chapter: a hairline above it and generous
  * space, so the page reads as a sequence of rooms instead of one
  * long list. */
@@ -1328,8 +1356,9 @@ table.ledger tfoot tr:last-child td {
   max-width: 620px;
 }
 
-/* The ten payment sources, as pills: one restrained accent, same
- * device as the status stamps elsewhere on the site. */
+/* The ten payment sources, as pills: the logo's pale blue, so this
+ * section reads in a different colour from the green status stamps
+ * elsewhere on the site. */
 .pay-pills {
   list-style: none;
   display: flex;
@@ -1342,9 +1371,9 @@ table.ledger tfoot tr:last-child td {
 .pay-pills li {
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border: 1px solid #9db8a7;
+  color: var(--logo-slate);
+  background: var(--logo-blue-soft);
+  border: 1px solid #a9c4cd;
   border-radius: 999px;
   padding: 6px 13px;
   transition:
@@ -1354,7 +1383,7 @@ table.ledger tfoot tr:last-child td {
 
 .pay-pills li:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(31, 77, 58, 0.18);
+  box-shadow: 0 3px 10px rgba(58, 109, 123, 0.18);
 }
 
 /* How-it-works steps and feature cards: paper cards with a large
@@ -1387,7 +1416,7 @@ table.ledger tfoot tr:last-child td {
   font-family: var(--serif);
   font-size: 30px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--logo-teal);
   line-height: 1;
   margin-bottom: 10px;
 }
@@ -1412,6 +1441,7 @@ table.ledger tfoot tr:last-child td {
 
 .feature-card {
   border: 1px solid var(--line-strong);
+  border-top: 3px solid var(--logo-lavender);
   border-radius: var(--radius);
   background: #fff;
   box-shadow: var(--shadow);

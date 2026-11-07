@@ -218,16 +218,7 @@ export default function About() {
       <div className="card">
         <h2>Disclosure</h2>
         <p>
-          Twinnear is a port of TwinPayAI, an agentic-payments project
-          on Stacks by the same author, to NEAR. Only the NEAR
-          integration is new: the Rust contract, the NEAR Wallet
-          Selector login, and the 1Click and relayer design. The payment
-          flow, the vault and policy-engine concept, and the ledger UI
-          pattern are carried over from TwinPayAI.
-        </p>
-        <p>
-          TwinPayAI used a Groq AI decision engine. It is not in this
-          build. This build is payments only. There is no AI here.
+          There is no AI in this build. This build is payments only.
         </p>
       </div>
 
@@ -254,7 +245,7 @@ export default function About() {
           <li>
             <strong>
               The spend guard protects NEAR payments in full, and USDC
-              payments in full too — except the receipt.
+              payments in full too, except the receipt.
             </strong>{" "}
             For a NEAR invoice, your max per invoice, your daily cap,
             and your seller allowlist are all enforced, at creation
