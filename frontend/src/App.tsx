@@ -1,9 +1,17 @@
-import { Suspense, lazy } from "react";
-import { Link, Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Suspense, lazy, useEffect } from "react";
+import {
+  Link,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import WalletButton from "./components/WalletButton";
 
 // Route pages are lazy-loaded so the initial bundle stays small; the
 // heavy NEAR libraries live in lib/near.ts behind dynamic import().
+const Landing = lazy(() => import("./pages/Landing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const About = lazy(() => import("./pages/About"));
 const Docs = lazy(() => import("./pages/Docs"));
@@ -24,9 +32,20 @@ function PageFallback() {
   );
 }
 
+/** A new route starts at the top: without this, opening a page from
+ * the bottom of a long one (the landing page) would land mid-page. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <div className="sheet">
+      <ScrollToTop />
       <header className="masthead">
         <Link className="brand" to="/">
           <img className="brand-mark" src="/logo.svg" alt="Twinnear" />
@@ -39,8 +58,9 @@ export default function App() {
 
       <nav className="nav" aria-label="Main navigation">
         <NavLink to="/" end>
-          Ledger
+          Home
         </NavLink>
+        <NavLink to="/ledger">Ledger</NavLink>
         <NavLink to="/invoices">Invoices</NavLink>
         <NavLink to="/invoices/new">New invoice</NavLink>
         <NavLink to="/recurring">Retainers</NavLink>
@@ -53,7 +73,8 @@ export default function App() {
 
       <Suspense fallback={<PageFallback />}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/ledger" element={<Dashboard />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/new" element={<NewInvoice />} />
           <Route path="/recurring" element={<Recurring />} />
@@ -75,7 +96,7 @@ export default function App() {
               <div className="card">
                 <h2>Page not found</h2>
                 <p className="sub">
-                  <Link to="/">Back to the ledger</Link>
+                  <Link to="/ledger">Back to the ledger</Link>
                 </p>
               </div>
             }
@@ -88,7 +109,7 @@ export default function App() {
         integration is new. Testnet only. Contract twinnear.testnet ·
         schema v4.{" "}
         <Link to="/about">About</Link> · <Link to="/docs">Docs</Link> ·{" "}
-        <Link to="/faq">FAQ</Link> · <Link to="/">Ledger</Link> ·{" "}
+        <Link to="/faq">FAQ</Link> · <Link to="/ledger">Ledger</Link> ·{" "}
         <a
           href="https://github.com/0xward/Twinnear"
           target="_blank"

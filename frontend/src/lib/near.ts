@@ -105,6 +105,24 @@ export async function openWalletModal(): Promise<void> {
   m.show();
 }
 
+/**
+ * Warm up the wallet modal (selector modules + modal UI chunk) in the
+ * background, so the first "Connect wallet" click shows the modal
+ * immediately instead of waiting on chunk downloads with no feedback.
+ *
+ * Diagnosis of the slow first click: `openWalletModal` awaited
+ * `getSelector()` (five wallet-selector chunks downloaded in parallel,
+ * WalletConnect the heaviest) AND `getModal()` (the modal-ui chunk),
+ * then `setupWalletSelector` initialised all four wallet modules —
+ * all of it after the click, with the button showing nothing at all
+ * meanwhile. The chunks are already cached on the second click, which
+ * is why only the first click felt slow. Fire-and-forget: a failure
+ * here is ignored and the click path retries the same load.
+ */
+export function warmWalletModal(): void {
+  getModal().catch(() => {});
+}
+
 export async function getSignedInAccount(): Promise<string | null> {
   const selector = await getSelector();
   const state = selector.store.getState();

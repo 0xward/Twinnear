@@ -266,6 +266,18 @@ export default function PayInvoice() {
     !invoice.released &&
     invoice.due_date !== null &&
     nowNs >= invoice.due_date;
+  // One plain sentence on what the status means right now, so a
+  // first-time visitor is never left guessing what happens next.
+  const statusExplainer =
+    invoice.status === "Pending"
+      ? "Nothing is held yet. Once the client pays, the money moves into escrow, and this timeline fills in."
+      : invoice.status === "Paid" && !invoice.released
+        ? "The money is in escrow now. The seller releases it on delivery, or refunds it."
+        : invoice.status === "Paid" && invoice.released
+          ? "Done. The escrow was released to the seller."
+          : invoice.status === "Refunded"
+            ? "Done. The escrow went back to the client."
+            : "Cancelled before payment. Nothing moved.";
   // L-04: 1Click is mainnet-only — a .testnet recipient is always
   // rejected by the API, so disable the section up front.
   const oneClickBlocked = invoice.seller.endsWith(".testnet");
@@ -471,7 +483,8 @@ export default function PayInvoice() {
       </p>
 
       <hr className="rule" />
-      <h3 style={{ margin: "0 0 12px" }}>Where this invoice stands</h3>
+      <h3 style={{ margin: "0 0 4px" }}>Where this invoice stands</h3>
+      <p className="sub">{statusExplainer}</p>
       <InvoiceTimeline invoice={invoice} />
 
       {error && <div className="error" role="alert">{error}</div>}

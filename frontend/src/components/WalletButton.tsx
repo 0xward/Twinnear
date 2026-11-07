@@ -4,11 +4,15 @@ import {
   onAccountChange,
   openWalletModal,
   signOut,
+  warmWalletModal,
 } from "../lib/near";
 import { EXPLORER_URL } from "../lib/config";
 
 export default function WalletButton() {
   const [accountId, setAccountId] = useState<string | null>(null);
+  // The first click used to sit dead for seconds while the wallet
+  // chunks downloaded: show "Opening wallet…" so the wait is visible.
+  const [opening, setOpening] = useState(false);
 
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
@@ -33,9 +37,46 @@ export default function WalletButton() {
     };
   }, []);
 
+  // Warm up the wallet modal when the browser is idle, so the first
+  // click is fast even on a phone (no hover there to preload on).
+  // The selector modules already start loading at mount above; this
+  // adds only the modal-ui chunk.
+  useEffect(() => {
+    const win = window as unknown as {
+      requestIdleCallback?: (
+        cb: () => void,
+        opts?: { timeout: number },
+      ) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleHandle: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (win.requestIdleCallback) {
+      idleHandle = win.requestIdleCallback(() => warmWalletModal(), {
+        timeout: 4000,
+      });
+    } else {
+      timer = setTimeout(() => warmWalletModal(), 2000);
+    }
+    return () => {
+      if (idleHandle !== undefined) win.cancelIdleCallback?.(idleHandle);
+      if (timer !== undefined) clearTimeout(timer);
+    };
+  }, []);
+
   async function handleSignOut() {
     await signOut();
     setAccountId(null);
+  }
+
+  async function handleConnect() {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await openWalletModal();
+    } finally {
+      setOpening(false);
+    }
   }
 
   if (accountId) {
@@ -69,8 +110,14 @@ export default function WalletButton() {
   }
 
   return (
-    <button className="btn" onClick={openWalletModal}>
-      Connect wallet
+    <button
+      className="btn"
+      onClick={handleConnect}
+      onMouseEnter={warmWalletModal}
+      onFocus={warmWalletModal}
+      disabled={opening}
+    >
+      {opening ? "Opening wallet…" : "Connect wallet"}
     </button>
   );
 }

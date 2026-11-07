@@ -314,7 +314,7 @@ export default function Docs() {
         <ol className="steps">
           <li>
             <span>
-              Open the <Link to="/">Ledger</Link>. It shows what you
+              Open the <Link to="/ledger">Ledger</Link>. It shows what you
               received, what is held in escrow, what is still owed to
               you, and totals per client.
             </span>

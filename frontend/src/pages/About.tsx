@@ -201,13 +201,13 @@ export default function About() {
             </a>
           </dd>
           <dt>Schema</dt>
-          <dd>Version 2</dd>
+          <dd>Version 4</dd>
           <dt>Wasm SHA-256</dt>
           <dd className="mono" style={{ wordBreak: "break-all" }}>
             {EXPECTED_WASM_SHA256}
           </dd>
           <dt>First deployed</dt>
-          <dd>7 November 2026, upgraded to v2 the same day</dd>
+          <dd>7 November 2026, upgraded to v4 the same day</dd>
           <dt>Tests</dt>
           <dd>90 unit tests pass</dd>
           <dt>Network</dt>

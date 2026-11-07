@@ -14,6 +14,7 @@ import CurrencyBadge from "../components/CurrencyBadge";
 import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
 import ProvenOnNear from "../components/ProvenOnNear";
+import Reveal from "../components/Reveal";
 import TrustStrip from "../components/TrustStrip";
 import type { Invoice } from "../lib/types";
 
@@ -153,7 +154,13 @@ export default function Dashboard() {
   return (
     <div>
       <div className="page-head">
-        <h1>The ledger</h1>
+        <div className="head-row">
+          <h1>The ledger</h1>
+          <span className="spacer" />
+          <Link className="btn" to="/invoices/new">
+            New invoice
+          </Link>
+        </div>
         <p className="muted">
           What you have received, what is held in escrow, and what is still
           owed to you, at a glance.
@@ -187,7 +194,7 @@ export default function Dashboard() {
             <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
-            1Click payments confirmed by the seller, not checked on-chain
+            seller-confirmed, not on-chain
           </div>
         </div>
         <div className="stat">
@@ -197,6 +204,7 @@ export default function Dashboard() {
             <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
+            held for open invoices ·{" "}
             <FiatEstimate
               amountSmallestUnit={escrowYocto.toString()}
               currency="Near"
@@ -248,10 +256,13 @@ export default function Dashboard() {
         Fiat amounts are rough estimates, not the rate you will be paid at.
       </p>
 
-      <ProvenOnNear />
+      <Reveal>
+        <ProvenOnNear />
+      </Reveal>
 
       {error && <div className="error" role="alert">{error}</div>}
 
+      <Reveal>
       <div className="card">
         <h2>Clients</h2>
         <p className="sub">
@@ -311,7 +322,9 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Recent invoices</h2>
         <p className="sub">The five newest entries in the ledger.</p>
@@ -382,6 +395,7 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+      </Reveal>
     </div>
   );
 }

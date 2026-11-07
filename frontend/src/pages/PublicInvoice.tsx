@@ -64,7 +64,7 @@ export default function PublicInvoice() {
         <h2>Invalid invoice link</h2>
         <p className="sub">
           &ldquo;{id}&rdquo; is not an invoice number.{" "}
-          <Link to="/">Back to the ledger</Link>
+          <Link to="/ledger">Back to the ledger</Link>
         </p>
       </div>
     );
@@ -84,7 +84,7 @@ export default function PublicInvoice() {
         <h2>Could not load this invoice</h2>
         <p className="sub">{error}</p>
         <p className="sub">
-          <Link to="/">Back to the ledger</Link>
+          <Link to="/ledger">Back to the ledger</Link>
         </p>
       </div>
     );
@@ -97,7 +97,7 @@ export default function PublicInvoice() {
         <p className="sub">
           No invoice #{id} on the contract {CONTRACT_ID}. Check the
           link for a typo, or look at the invoices that do exist:{" "}
-          <Link to="/">Back to the ledger</Link>
+          <Link to="/ledger">Back to the ledger</Link>
         </p>
       </div>
     );
