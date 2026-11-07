@@ -1,22 +1,24 @@
 import { Link } from "react-router-dom";
+import PayAssetIcon, { type PayAsset } from "../components/PayAssetIcon";
 import Reveal from "../components/Reveal";
 import ProvenOnNear from "../components/ProvenOnNear";
 import TrustStrip from "../components/TrustStrip";
 import { EXPLORER_URL } from "../lib/config";
 import { INVOICE_1_TX } from "../lib/invoiceTx";
 
-/** The ten ways a client can pay, via 1Click (see lib/intents.ts). */
-const PAY_OPTIONS = [
-  "USDC on Base",
-  "USDC on Ethereum",
-  "USDC on Arbitrum",
-  "USDC on Solana",
-  "USDT on Ethereum",
-  "ETH on Ethereum",
-  "ETH on Arbitrum",
-  "ETH on Base",
-  "SOL on Solana",
-  "BTC on Bitcoin",
+/** The ten ways a client can pay, via 1Click (see lib/intents.ts).
+ * `asset` picks the coin mark shown at the left of the pill. */
+const PAY_OPTIONS: { asset: PayAsset; label: string }[] = [
+  { asset: "USDC", label: "USDC on Base" },
+  { asset: "USDC", label: "USDC on Ethereum" },
+  { asset: "USDC", label: "USDC on Arbitrum" },
+  { asset: "USDC", label: "USDC on Solana" },
+  { asset: "USDT", label: "USDT on Ethereum" },
+  { asset: "ETH", label: "ETH on Ethereum" },
+  { asset: "ETH", label: "ETH on Arbitrum" },
+  { asset: "ETH", label: "ETH on Base" },
+  { asset: "SOL", label: "SOL on Solana" },
+  { asset: "BTC", label: "BTC on Bitcoin" },
 ];
 
 const FEATURES: { title: string; body: string }[] = [
@@ -105,8 +107,9 @@ export default function Landing() {
           </p>
           <ul className="pay-pills">
             {PAY_OPTIONS.map((option) => (
-              <li key={option} className="stagger-item">
-                {option}
+              <li key={option.label} className="stagger-item">
+                <PayAssetIcon asset={option.asset} />
+                {option.label}
               </li>
             ))}
           </ul>

@@ -28,18 +28,6 @@
   --logo-teal-soft: #e2ecef;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 8px 24px rgba(28, 26, 23, 0.06);
-  /* Font trial 3 (2026-11-07, user request, reversible): the Anton
-   * trial was rejected ("jelek"). Try the job-board screenshot
-   * font: Playfair Display (Google Fonts), a high-contrast bold
-   * serif, for headings and big numbers only. Body text stays on
-   * the pre-trial system sans. Previous values (for the revert):
-   * --serif Georgia, "Times New Roman", Times, serif; --sans
-   * -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-   * sans-serif; headings used var(--serif) with font-weight 600
-   * and letter-spacing -0.01em; no Google Fonts <link> in
-   * index.html. To revert, restore those and remove the Playfair
-   * Display <link>. */
-  --display: "Playfair Display", Georgia, "Times New Roman", Times, serif;
   --serif: Georgia, "Times New Roman", Times, serif;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -72,8 +60,8 @@ h1,
 h2,
 h3,
 .amount {
-  font-family: var(--display);
-  font-weight: 700;
+  font-family: var(--serif);
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -1500,6 +1488,9 @@ table.ledger tfoot tr:last-child td {
 }
 
 .pay-pills li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--logo-slate);
@@ -1515,6 +1506,14 @@ table.ledger tfoot tr:last-child td {
 .pay-pills li:hover {
   transform: translateY(-1px);
   box-shadow: 0 3px 10px rgba(58, 109, 123, 0.18);
+}
+
+/* Coin mark at the left of a pay pill (PayAssetIcon): 18px so it
+ * reads next to the 13.5px pill text without dominating it. */
+.pay-asset-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 /* How-it-works steps and feature cards: paper cards with a large
@@ -1536,11 +1535,39 @@ table.ledger tfoot tr:last-child td {
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
+  /* Ambient float: the three step cards bob gently in sequence,
+   * forever, with no scroll needed. Staggered delays so they do
+   * not move in sync. Hover pauses the bob; the shadow still
+   * deepens. Pure transform, GPU-accelerated. */
+  animation: float-card 6s ease-in-out infinite;
+}
+
+.steps-grid .step:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.steps-grid .step:nth-child(2) {
+  animation-delay: 0.8s;
+}
+
+.steps-grid .step:nth-child(3) {
+  animation-delay: 1.6s;
+}
+
+@keyframes float-card {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 .step:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(28, 26, 23, 0.1);
+  animation-play-state: paused;
 }
 
 .step-num {
@@ -1731,7 +1758,8 @@ table.ledger tfoot tr:last-child td {
   }
 
   .card,
-  .stat {
+  .stat,
+  .step {
     animation: none;
   }
 
