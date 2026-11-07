@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Builds
+dist/
+frontend/dist/
+contract/target/
+# Build artifacts (reproducible — do not commit binaries)
+contract/twinnear.wasm
+tools/
+
+# Env & secrets (never commit keys or seed phrases)
+.env
+.env.*
+*.key
+*.pem
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

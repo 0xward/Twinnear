@@ -1,0 +1,32 @@
+[package]
+name = "twinnear"
+version = "0.1.0"
+edition = "2021"
+description = "Twinnear — gasless freelancer invoicing on NEAR (NEAR Hackathon, Real-World Money track)"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5"
+# Required directly: the borsh derive macros resolve the `borsh` crate
+# via proc_macro_crate and fail without a direct dependency.
+borsh = "1"
+
+# near-sdk 5 only compiles its own crate under a valid cfg. During
+# `cargo test` the dependency is built WITHOUT cfg(test), so the
+# `unit-testing` feature must be enabled for the test build.
+[dev-dependencies]
+near-sdk = { version = "5", features = ["unit-testing"] }
+# For unit tests that sign real NEP-413 payloads (M-01 on-chain verify).
+ed25519-dalek = "2"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+strip = true
+panic = "abort"
+overflow-checks = true

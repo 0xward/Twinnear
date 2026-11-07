@@ -1,0 +1,1 @@
+{"dependencies":{"near-api-js":"^5.1.0"},"description":"Reference gasless relayer server for Twinnear (NEAR Hackathon). Verifies a seller's NEP-413 signature off-chain and submits create_invoice_meta from a funded relayer account.","license":"MIT","name":"twinnear-relayer","private":true,"scripts":{"start":"node server.mjs"},"type":"module","version":"0.1.0"}
