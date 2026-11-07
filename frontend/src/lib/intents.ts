@@ -17,6 +17,20 @@
  *   address 0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de; GET /v0/status for
  *   it returned PENDING_DEPOSIT.
  *
+ * VERIFIED LIVE 2026-11-07 (dry quotes only, no funds moved):
+ * - USDT on Ethereum -> 1 wNEAR: 3.738286 USDT in, ~45 s.
+ * - SOL -> 1 wNEAR: 0.041659923 SOL in, ~22 s.
+ * - BTC -> 5 wNEAR: 0.00024619 BTC in, ~805 s. BTC has a minimum:
+ *   1 wNEAR was rejected ("Amount is too low for bridge, try at
+ *   least 1704889342611666938110749", about 1.7 wNEAR).
+ * - ETH on Arbitrum -> 1 wNEAR: 0.0016686 ETH in, ~27 s.
+ * - ETH on Base -> 1 wNEAR: 0.0016694 ETH in, ~37 s.
+ * - USDC on Solana -> 1 wNEAR: 3.734046 USDC in, ~22 s.
+ * - USDT on Arbitrum and USDT on Base DO NOT EXIST in /v0/tokens
+ *   (216 tokens checked 2026-11-07) — do not add them. Native NEAR
+ *   has no origin asset in the list either (only a nep245 NEAR-on-BSC
+ *   entry, a different standard, not added).
+ *
  * MAINNET ONLY — there is NO testnet for NEAR Intents
  * (docs.near-intents.org: "There is no testnet version of NEAR Intents").
  * A `.testnet` recipient is rejected by the API (HTTP 500 on quote).
@@ -84,7 +98,116 @@ export const SOURCE_ASSETS: Array<IntentToken & { label: string }> = [
     decimals: 6,
     blockchain: "arb",
   },
+  {
+    label: "USDT on Ethereum",
+    assetId:
+      "nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near",
+    symbol: "USDT",
+    decimals: 6,
+    blockchain: "eth",
+  },
+  {
+    label: "ETH on Arbitrum",
+    assetId: "nep141:arb.omft.near",
+    symbol: "ETH",
+    decimals: 18,
+    blockchain: "arb",
+  },
+  {
+    label: "ETH on Base",
+    assetId: "nep141:base.omft.near",
+    symbol: "ETH",
+    decimals: 18,
+    blockchain: "base",
+  },
+  {
+    label: "USDC on Solana",
+    assetId:
+      "nep141:sol-5ce3bf3a31af18be40ba30f721101b4341690186.omft.near",
+    symbol: "USDC",
+    decimals: 6,
+    blockchain: "sol",
+  },
+  {
+    label: "SOL on Solana",
+    assetId: "nep141:sol.omft.near",
+    symbol: "SOL",
+    decimals: 9,
+    blockchain: "sol",
+  },
+  {
+    label: "BTC on Bitcoin",
+    assetId: "nep141:btc.omft.near",
+    symbol: "BTC",
+    decimals: 8,
+    blockchain: "btc",
+  },
 ];
+
+/**
+ * Validate the client's refund address for the selected source asset.
+ * Returns an error message, or null when the address looks right for
+ * that chain. The 1Click API validates it too, but a clear message here
+ * beats an opaque API error after the quote round trip.
+ */
+export function validateRefundAddress(
+  asset: IntentToken,
+  address: string,
+): string | null {
+  const trimmed = address.trim();
+  if (trimmed.length === 0) {
+    return "Enter your refund address on the origin chain.";
+  }
+  if (
+    asset.blockchain === "eth" ||
+    asset.blockchain === "arb" ||
+    asset.blockchain === "base"
+  ) {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(trimmed)) {
+      return (
+        "Enter your refund address on the origin chain. " +
+        "A 0x address with 40 hex characters."
+      );
+    }
+    return null;
+  }
+  if (asset.blockchain === "sol") {
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) {
+      return (
+        "Enter your Solana refund address. " +
+        "A base58 address, 32 to 44 characters."
+      );
+    }
+    return null;
+  }
+  if (asset.blockchain === "btc") {
+    if (
+      !/^(1|3)[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(trimmed) &&
+      !/^bc1[qp][0-9a-z]{38,59}$/.test(trimmed)
+    ) {
+      return (
+        "Enter your Bitcoin refund address. " +
+        "A legacy address (starting with 1 or 3) or a bech32 address (bc1q...)."
+      );
+    }
+    return null;
+  }
+  return (
+    "Enter your refund address on the origin chain. " +
+    "This chain is not supported for refunds yet."
+  );
+}
+
+/** Placeholder for the refund address field, per origin chain. */
+export function refundAddressPlaceholder(asset: IntentToken): string {
+  if (asset.blockchain === "sol") {
+    return "Your Solana wallet address (base58)";
+  }
+  if (asset.blockchain === "btc") {
+    return "Your Bitcoin wallet address (1..., 3... or bc1q...)";
+  }
+  return "0x… (your EVM wallet address, 40 hex chars)";
+}
 
 export const MAINNET_ONLY_NOTE =
   "1Click / NEAR Intents has no testnet (verified 2026-11-06). Quotes below " +

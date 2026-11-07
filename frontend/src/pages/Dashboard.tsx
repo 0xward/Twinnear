@@ -13,6 +13,7 @@ import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
 import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
+import ProvenOnNear from "../components/ProvenOnNear";
 import TrustStrip from "../components/TrustStrip";
 import type { Invoice } from "../lib/types";
 
@@ -246,6 +247,8 @@ export default function Dashboard() {
       <p className="muted" style={{ marginTop: -8, marginBottom: 18 }}>
         Fiat amounts are rough estimates, not the rate you will be paid at.
       </p>
+
+      <ProvenOnNear />
 
       {error && <div className="error" role="alert">{error}</div>}
 

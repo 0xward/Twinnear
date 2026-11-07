@@ -1172,6 +1172,47 @@ table.ledger tfoot tr:last-child td {
   flex-wrap: wrap;
 }
 
+/* ---- proven on NEAR ---- */
+.proof-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.proof-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.proof-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.proof-card p {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.proof-card p:last-child {
+  margin-bottom: 0;
+}
+
+.proof-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 13px;
+}
+
+.proof-links a {
+  white-space: nowrap;
+}
+
 /* ---- guides / docs ---- */
 .guide {
   scroll-margin-top: 12px;

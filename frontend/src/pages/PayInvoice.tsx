@@ -27,6 +27,8 @@ import {
   getSwapStatus,
   pollSwapStatus,
   quoteIntentSettlement,
+  refundAddressPlaceholder,
+  validateRefundAddress,
 } from "../lib/intents";
 import type { IntentQuote, SwapStatus } from "../lib/intents";
 import type { Invoice } from "../lib/types";
@@ -156,10 +158,16 @@ export default function PayInvoice() {
     setQuoteError(null);
     setQuoteBusy(true);
     try {
-      if (!/^0x[0-9a-fA-F]{40}$/.test(refundTo.trim())) {
-        throw new Error(
-          "Enter your refund address on the origin chain. A 0x address with 40 hex characters.",
-        );
+      // Refund address format depends on the origin chain (EVM,
+      // Solana, or Bitcoin) — validated per asset, not one regex.
+      const selectedAsset = SOURCE_ASSETS.find(
+        (a) => a.assetId === sourceAsset,
+      );
+      const refundError = selectedAsset
+        ? validateRefundAddress(selectedAsset, refundTo)
+        : "Pick a payment source first.";
+      if (refundError) {
+        throw new Error(refundError);
       }
       const q = await quoteIntentSettlement({
         sourceAsset,
@@ -739,7 +747,10 @@ export default function PayInvoice() {
                 id="refundTo"
                 value={refundTo}
                 onChange={(e) => setRefundTo(e.target.value)}
-                placeholder="0x… (your EVM wallet address, 40 hex chars)"
+                placeholder={refundAddressPlaceholder(
+                  SOURCE_ASSETS.find((a) => a.assetId === sourceAsset) ??
+                    SOURCE_ASSETS[0],
+                )}
                 autoComplete="off"
               />
               <div className="row" style={{ marginTop: 14 }}>
