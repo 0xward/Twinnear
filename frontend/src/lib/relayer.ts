@@ -18,10 +18,15 @@
  * on-chain access keys and reconstructs the Borsh-serialized NEP-413
  * payload. The contract enforces replay protection with a per-seller
  * nonce and only accepts meta calls from the relayer account; the
- * signature and public key are logged on-chain for audit. The server's
- * Borsh layout was verified byte-identical to near-api-js's serializer
- * (2026-11-06); final confirmation against a real Meteor signature is
- * a phase-3 item.
+ * signature and public key are logged on-chain for audit.
+ * CORRECTED 2026-11-07: the claim that the Borsh layout was
+ * "verified byte-identical to near-api-js's serializer" was WRONG -
+ * a real Meteor signature failed verification live. The payload was
+ * missing the hardcoded u32 tag 2147484061 (2^31 + 413) and the
+ * signature is over SHA-256 of the serialized payload, not the raw
+ * bytes. Both are now included in the server
+ * (frontend/api/relay/_core.mjs) and the contract
+ * (verify_meta_signature) - the two must stay in sync.
  *
  * The u64 replay counter is part of the SIGNED message, so one signature
  * can only ever create one invoice: replaying the same signed payload

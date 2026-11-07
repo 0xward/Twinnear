@@ -86,7 +86,7 @@ export default function App() {
       <footer className="footer">
         Twinnear is a port of TwinPayAI (Stacks) to NEAR. Only the NEAR
         integration is new. Testnet only. Contract twinnear.testnet ·
-        schema v2.{" "}
+        schema v3.{" "}
         <Link to="/about">About</Link> · <Link to="/docs">Docs</Link> ·{" "}
         <Link to="/faq">FAQ</Link> · <Link to="/">Ledger</Link> ·{" "}
         <a

@@ -562,9 +562,13 @@ impl Contract {
 
     /// Verify a seller's NEP-413 ed25519 signature on-chain (M-01).
     /// Reconstructs the exact Borsh payload the wallet signed:
-    /// `{ message, nonce: [u8; 32], recipient, callbackUrl: None }`,
-    /// where `message` is the canonical
+    /// `{ tag: u32 = 2147484061, message, nonce: [u8; 32], recipient,
+    /// callbackUrl: None }`, where `message` is the canonical
     /// `twinnear:create_invoice|<seller>|<client>|<amount>|<description>|<counter>|<nonceBase64>`.
+    /// The signature is over SHA-256 of the serialized payload, not
+    /// the raw bytes (Wallet Selector `verifySignature`, per NEP-413).
+    /// CORRECTED 2026-11-07: the tag and the hash were both missing,
+    /// which made every real Meteor signature fail verification live.
     fn verify_meta_signature(
         seller: &AccountId,
         client: &AccountId,
@@ -603,12 +607,20 @@ impl Contract {
             seller, client, amount.0, description, nonce, nep413_nonce_b64
         );
         let mut payload = Vec::new();
+        // NEP-413 tag, hardcoded per the NEP (2^31 + 413). The wallet
+        // signs [tag || message || nonce || recipient || callbackUrl];
+        // omitting the tag was the cause of the 2026-11-07 live
+        // failure ("NEP-413 signature verification failed").
+        payload.extend_from_slice(&2147484061u32.to_le_bytes());
         borsh_str(&message, &mut payload);
         payload.extend_from_slice(&nonce_bytes);
         borsh_str(env::current_account_id().as_str(), &mut payload);
         payload.push(0); // callbackUrl: None
+        // The signature is over SHA-256 of the serialized payload,
+        // not the raw bytes (Wallet Selector `verifySignature`).
+        let hashed = env::sha256(&payload);
         assert!(
-            env::ed25519_verify(sig, &payload, pk),
+            env::ed25519_verify(sig, &hashed, pk),
             "NEP-413 signature verification failed"
         );
     }
@@ -1159,9 +1171,11 @@ impl Contract {
     // ---- Views ----
 
     /// Schema version of this contract. v1 had no such method;
-    /// v2 returns 2.
+    /// v2 returns 2. v3 fixes the NEP-413 verification (tag + SHA-256);
+    /// state schema is unchanged from v2, so a v2 -> v3 redeploy needs
+    /// NO migrate call.
     pub fn get_version(&self) -> u32 {
-        2
+        3
     }
 
     pub fn get_invoice(&self, id: u64) -> Option<Invoice> {
@@ -1403,6 +1417,9 @@ mod tests {
             seller, client, amount, description, counter, nonce_b64
         );
         let mut payload = Vec::new();
+        // NEP-413 tag, hardcoded per the NEP (2^31 + 413) - must match
+        // verify_meta_signature and the wallet's serializeNep413.
+        payload.extend_from_slice(&2147484061u32.to_le_bytes());
         payload.extend_from_slice(&(message.len() as u32).to_le_bytes());
         payload.extend_from_slice(message.as_bytes());
         payload.extend_from_slice(&nonce_bytes);
@@ -1410,7 +1427,9 @@ mod tests {
         payload.extend_from_slice(&(recipient.len() as u32).to_le_bytes());
         payload.extend_from_slice(recipient.as_bytes());
         payload.push(0);
-        let sig = signing.sign(&payload);
+        // The wallet signs SHA-256 of the serialized payload.
+        let hashed = near_sdk::env::sha256(&payload);
+        let sig = signing.sign(&hashed);
         (B64.encode(sig.to_bytes()), public_key, nonce_b64)
     }
 
@@ -1857,6 +1876,58 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "NEP-413 signature verification failed")]
+    fn meta_rejects_old_layout_signature() {
+        // Regression test for the 2026-11-07 live failure: a signature
+        // over the pre-v3 payload layout (no NEP-413 tag, signed over
+        // the raw bytes instead of their SHA-256) must be rejected,
+        // even though it was valid under the old (wrong) verifier.
+        use ed25519_dalek::Signer;
+        use near_sdk::base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+        let mut c = setup(contract_acct());
+        c.set_relayer(Some(relayer_acct()));
+        set_predecessor(relayer_acct());
+        let signing = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+        let verifying = signing.verifying_key();
+        let public_key = format!(
+            "ed25519:{}",
+            near_sdk::bs58::encode(verifying.as_bytes()).into_string()
+        );
+        let nonce_bytes = [9u8; 32];
+        let nonce_b64 = B64.encode(nonce_bytes);
+        let message = format!(
+            "twinnear:create_invoice|{}|{}|{}|{}|{}|{}",
+            alice(),
+            bob(),
+            100,
+            "x",
+            1,
+            nonce_b64
+        );
+        // Old (broken) layout: no tag, raw payload signed directly.
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&(message.len() as u32).to_le_bytes());
+        payload.extend_from_slice(message.as_bytes());
+        payload.extend_from_slice(&nonce_bytes);
+        let recipient = "twinnear.testnet";
+        payload.extend_from_slice(&(recipient.len() as u32).to_le_bytes());
+        payload.extend_from_slice(recipient.as_bytes());
+        payload.push(0);
+        let sig = signing.sign(&payload);
+        c.create_invoice_meta(
+            alice(),
+            bob(),
+            U128(100),
+            "x".to_string(),
+            1,
+            B64.encode(sig.to_bytes()),
+            public_key,
+            nonce_b64,
+            None,
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "NEP-413 signature verification failed")]
     fn meta_rejects_bad_signature() {
         let mut c = setup(contract_acct());
         c.set_relayer(Some(relayer_acct()));
@@ -2175,7 +2246,7 @@ mod tests {
         set_predecessor(contract_acct());
         write_v1_state_with_live_invoice_1();
         let mut c = Contract::migrate();
-        assert_eq!(c.get_version(), 2);
+        assert_eq!(c.get_version(), 3);
         assert_eq!(c.get_owner(), contract_acct());
         assert_eq!(c.get_invoice_count(), 1);
         let inv = c.get_invoice(1).unwrap();
@@ -2238,7 +2309,7 @@ mod tests {
         set_predecessor(contract_acct());
         write_v1_state_with_live_invoice_1();
         let c = Contract::migrate();
-        assert_eq!(c.get_version(), 2);
+        assert_eq!(c.get_version(), 3);
         // End of the first migrate "call": dropping the returned
         // contract flushes its maps to storage, exactly as the
         // on-chain wrapper does at the end of a transaction. Only now
@@ -2261,6 +2332,6 @@ mod tests {
         assert_eq!(inv.currency, Currency::Near);
         assert_eq!(c2.get_invoice_count(), 1);
         assert_eq!(c2.get_owner(), contract_acct());
-        assert_eq!(c2.get_version(), 2);
+        assert_eq!(c2.get_version(), 3);
     }
 }

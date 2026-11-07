@@ -14,4 +14,4 @@ export const CONTRACT_ID = "twinnear.testnet";
  * — update this on every contract rebuild.
  */
 export const EXPECTED_WASM_SHA256 =
-  "dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0";
+  "2894e4310c6972a2420bb02502cb60b9b84b13b51308966a9cca79669ee20835";

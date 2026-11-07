@@ -4,11 +4,22 @@ Target account: **`twinnear.testnet`** (created in Meteor Wallet, funded
 with 4 NEAR from the faucet — 0.2 NEAR is the storage reserve, ~3.8 NEAR
 usable).
 
-Contract status: **v1 LIVE** since 2026-11-07 (deployed via Termux +
-near-cli-rs, wasm 194,009 bytes, SHA-256
-`5c1c22243b9ce154d7f31da2d34185067208d2030647060a2869d1f6c6e09b1b`).
-The v2 upgrade is a **redeploy + migrate** — see "Redeploy + migrate
+Contract status: **v2 LIVE** since 2026-11-07 (deployed via Termux +
+near-cli-rs, wasm 213,007 bytes, SHA-256
+`dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0`).
+The v2 upgrade was a **redeploy + migrate** — see "Redeploy + migrate
 (v2)" below. Never call `new` again after the first deploy.
+
+**v3 (2026-11-07): NEP-413 verification fix — code-only redeploy, NO
+migrate.** The v3 code changes only the signature verification
+(tag + SHA-256) and the version number; the state schema is
+identical to v2, so the stored state keeps working as-is. Deploy the
+new wasm the same way as v2 (step 1-2 of "Redeploy + migrate (v2)"
+below) and STOP there — do NOT call `migrate`. Calling `migrate` on
+v2 state panics ("contract state v1 not found") and leaves the state
+untouched, so it is harmless but pointless. After deploy, verify
+`get_version` returns **3**. New wasm: 222,775 bytes, SHA-256
+`2894e4310c6972a2420bb02502cb60b9b84b13b51308966a9cca79669ee20835`.
 
 There are two ways to deploy. **The browser path is BLOCKED by
 Meteor** — it refuses the DeployContract action ("Contract deployment

@@ -58,14 +58,19 @@
  * - Every relay is logged (timestamp, seller, invoice id, tx hash) so
  *   there is a server-side audit trail (L-11).
  *
- * VERIFIED 2026-11-06: borshPayload() output is byte-identical to
- * near-api-js's own Borsh serializer for the NEP-413 schema (checked
- * with utils.serialize.serialize). Final confirmation against a real
- * Meteor Wallet signature is still a phase-3 click-through item; if the
- * wallet signs different bytes, fix borshPayload() here - the contract
- * does not depend on it.
+ * CORRECTED 2026-11-07: the 2026-11-06 claim that borshPayload()
+ * was "byte-identical to near-api-js's own Borsh serializer" was
+ * WRONG. A real Meteor signature failed verification live with
+ * "NEP-413 signature verification failed": the payload was missing
+ * the hardcoded u32 tag 2147484061 (2^31 + 413) and the signature is
+ * over SHA-256 of the serialized payload, not the raw bytes
+ * (Wallet Selector `serializeNep413` / `verifySignature`, per
+ * NEP-413). Both are now included here AND in the contract's
+ * verify_meta_signature (same bug, same fix) - the contract DOES
+ * depend on this layout, so the two must stay in sync.
  */
 
+import { createHash } from "node:crypto";
 import { connect, keyStores, utils } from "near-api-js";
 
 const RELAYER_ACCOUNT_ID = process.env.RELAYER_ACCOUNT_ID;
@@ -114,15 +119,26 @@ function borshString(s) {
   return Buffer.concat([len, b]);
 }
 
-/** Serialize the NEP-413 payload exactly as near-api-js signs it:
- *  { message: string, nonce: [u8; 32], recipient: string,
- *    callbackUrl: Option<string> } - callbackUrl is None here. */
+/** Serialize the NEP-413 payload exactly as the wallet signs it
+ *  (Wallet Selector `serializeNep413`, per NEP-413):
+ *  { tag: u32 = 2147484061, message: string, nonce: [u8; 32],
+ *    recipient: string, callbackUrl: Option<string> } - callbackUrl
+ *  is None here. The tag is a hardcoded constant (2^31 + 413);
+ *  omitting it was the cause of the 2026-11-07 live failure
+ *  "NEP-413 signature verification failed": the server verified
+ *  against [message || nonce || recipient || None] while the wallet
+ *  signed [tag || message || nonce || recipient || None].
+ *  The signature is over SHA-256 of these bytes, NOT the raw
+ *  bytes - see the verify step below. */
 function borshPayload(message, nonceBase64, recipient) {
   const nonce = Buffer.from(nonceBase64, "base64");
   if (nonce.length !== 32) {
     throw new Error("NEP-413 nonce must be 32 bytes");
   }
+  const tag = Buffer.alloc(4);
+  tag.writeUInt32LE(2147484061); // NEP-413 tag (2^31 + 413), hardcoded per the NEP
   return Buffer.concat([
+    tag,
     borshString(message),
     nonce,
     borshString(recipient),
@@ -398,9 +414,12 @@ async function handleRelay(headers, rawBody) {
     }
 
     // (3) Verify the NEP-413 ed25519 signature over the Borsh payload.
+    // The wallet signs SHA-256(serialized payload), not the raw bytes
+    // (Wallet Selector `verifySignature`, per NEP-413).
     const payloadBytes = borshPayload(message, nonceBase64, recipient);
+    const hashedPayload = createHash("sha256").update(payloadBytes).digest();
     const sigBytes = Buffer.from(signature, "base64");
-    const ok = utils.PublicKey.fromString(publicKey).verify(payloadBytes, sigBytes);
+    const ok = utils.PublicKey.fromString(publicKey).verify(hashedPayload, sigBytes);
     if (!ok) throw badRequest("NEP-413 signature verification failed");
 
     // (4) Replay counter must be fresh.
