@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo.svg" alt="Twinnear" width="360">
+</p>
+
 # Twinnear: Gasless Freelancer Invoicing on NEAR
 
 [![CI](https://github.com/0xward/Twinnear/actions/workflows/ci.yml/badge.svg)](https://github.com/0xward/Twinnear/actions/workflows/ci.yml)
