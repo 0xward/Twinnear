@@ -736,7 +736,7 @@ export default function PayInvoice() {
                         {quote.depositAddress}
                       </dd>
                       <dt>Status</dt>
-                      <dd>{swapStatus?.status ?? "—"}</dd>
+                      <dd>{swapStatus?.status ?? "-"}</dd>
                     </>
                   )}
                 </dl>

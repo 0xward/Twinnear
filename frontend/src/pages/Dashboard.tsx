@@ -124,7 +124,7 @@ export default function Dashboard() {
     const parts: string[] = [];
     if (nearYocto > 0n) parts.push(`${formatNear(nearYocto.toString())} Ⓝ`);
     if (usdcMicro > 0n) parts.push(`${formatUsdc(usdcMicro.toString())} USDC`);
-    return parts.length > 0 ? parts.join(" · ") : "—";
+    return parts.length > 0 ? parts.join(" · ") : "-";
   }
 
   const recent = [...invoices]

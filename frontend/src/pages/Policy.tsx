@@ -153,7 +153,7 @@ export default function PolicyPage() {
               ? rulesActive
                 ? "Active"
                 : "No rules"
-              : "—"}
+              : "-"}
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             {account

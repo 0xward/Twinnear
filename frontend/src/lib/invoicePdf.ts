@@ -220,7 +220,7 @@ export function buildInvoicePdf(
       ? inv.items
       : [
           {
-            description: inv.description || "—",
+            description: inv.description || "-",
             quantity: 1,
             unit_price: inv.amount,
           },

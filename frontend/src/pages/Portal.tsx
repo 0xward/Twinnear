@@ -148,7 +148,7 @@ export default function Portal() {
                           <span className="ref">{invoiceRef(inv)}</span>
                         </td>
                         <td>{inv.seller}</td>
-                        <td>{inv.description || "—"}</td>
+                        <td>{inv.description || "-"}</td>
                         <td className="num">
                           <CurrencyBadge currency={inv.currency} />{" "}
                           {formatInvoiceAmount(inv)}
@@ -203,7 +203,7 @@ export default function Portal() {
                           <span className="ref">{invoiceRef(inv)}</span>
                         </td>
                         <td>{inv.seller}</td>
-                        <td>{inv.description || "—"}</td>
+                        <td>{inv.description || "-"}</td>
                         <td className="num">{formatInvoiceAmount(inv)}</td>
                         <td>
                           <span className={stampClass(inv)}>

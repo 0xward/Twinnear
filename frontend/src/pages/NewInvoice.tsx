@@ -392,7 +392,7 @@ export default function NewInvoice() {
   const previewTotal =
     computedTotalSmallest !== null
       ? `${formatUnit(computedTotalSmallest)} ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`
-      : `— ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`;
+      : `- ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`;
 
   return (
     <div className="card">
