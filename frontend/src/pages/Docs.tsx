@@ -65,6 +65,12 @@ export default function Docs() {
           <dd>
             <GuideLink to="#books">Keep your books</GuideLink>
           </dd>
+          <dt>I want to move to mainnet</dt>
+          <dd>
+            <GuideLink to="#mainnet-readiness">
+              Move to mainnet
+            </GuideLink>
+          </dd>
         </dl>
       </div>
 
@@ -330,6 +336,56 @@ export default function Docs() {
           The USD figures next to amounts are rough estimates from
           CoinGecko, never the settlement rate. Do not book them as
           the amount you were paid.
+        </p>
+      </div>
+
+      <div className="card guide" id="mainnet-readiness">
+        <p className="filed-under">Filed under: Get paid</p>
+        <h2>Move to mainnet</h2>
+        <p>
+          <strong>When to use it:</strong> you want to run Twinnear on
+          NEAR mainnet instead of testnet.
+        </p>
+        <ol className="steps">
+          <li>
+            <span>
+              Deploy the same contract wasm to a mainnet account. The
+              contract has no testnet-only logic, so no code change is
+              needed.
+            </span>
+          </li>
+          <li>
+            <span>
+              Point the frontend at mainnet: set NETWORK_ID,
+              CONTRACT_ID, and RPC_URL in
+              frontend/src/lib/config.ts, and the WalletConnect chainId
+              in frontend/src/lib/near.ts.
+            </span>
+          </li>
+          <li>
+            <span>
+              Point the relayer at mainnet by changing its environment
+              variables only. No code change is needed.
+            </span>
+          </li>
+          <li>
+            <span>
+              Budget about 2.5 NEAR for the deploy: about 2.1 NEAR of
+              storage stake for the 213 KB wasm, plus account creation
+              and gas. This is an estimate, not a fixed price.
+            </span>
+          </li>
+        </ol>
+        <p className="muted">
+          Limits: 1Click is already mainnet-live, so cross-chain USDC
+          settlement works on mainnet as designed. The deploy path is
+          the same CLI path in DEPLOY.md, with the testnet network
+          config replaced by mainnet. The app has no testnet/mainnet
+          toggle, and the hackathon allows testnet-only entries, so the
+          app stays on testnet. Do not confuse the payout address with
+          a deploy: the hackathon form asks for a NEAR mainnet account
+          as a payout address, and a free implicit account (a
+          64-character hex address) is enough for that.
         </p>
       </div>
 

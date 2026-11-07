@@ -170,6 +170,36 @@ No other env vars are needed. The contract account
 (`twinnear.testnet`) and testnet RPC are set in
 `frontend/src/lib/config.ts`.
 
+## Mainnet readiness
+
+Twinnear runs on testnet today. The contract is ready for mainnet:
+it is network-agnostic (near-sdk, with no testnet-only logic), so the
+same wasm deploys on mainnet without a code change.
+
+Switching networks is a config change, not a contract change:
+
+- **Frontend:** `NETWORK_ID`, `CONTRACT_ID`, and `RPC_URL` in
+  `frontend/src/lib/config.ts`, plus the WalletConnect chainId in
+  `frontend/src/lib/near.ts`.
+- **Relayer:** environment variables only, no code change. It runs on
+  mainnet the same way it runs on testnet.
+
+1Click is already mainnet-live: a live quote on 6 November 2026
+turned 10 USDC on Base into 9.99436 USDC on NEAR, so cross-chain USDC
+settlement works on mainnet as designed.
+
+Deploying the contract to mainnet costs an estimated 2.5 NEAR: about
+2.1 NEAR of storage stake for the 213 KB wasm, plus account creation
+and gas. This is an estimate, not a fixed price. The deploy path is
+the same CLI path documented in [DEPLOY.md](DEPLOY.md), with the
+testnet network config replaced by mainnet. No testnet/mainnet toggle
+is built into the app; the hackathon allows testnet-only entries, so
+the app stays on testnet.
+
+Note: the hackathon submission form asks for a NEAR mainnet account
+as a payout address. That is not a mainnet deploy. A free implicit
+account (a 64-character hex address) is enough for the payout address.
+
 ## Contract API
 
 | Method | Type | Notes |

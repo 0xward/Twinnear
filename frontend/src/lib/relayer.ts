@@ -1,8 +1,8 @@
 /**
- * Gasless meta-transaction relayer — LIVE client implementation.
+ * Gasless meta-transaction relayer - LIVE client implementation.
  *
  * Flow: the seller signs a NEP-413 message over the invoice payload in
- * their own wallet (Meteor supports signMessage; OKX may not — the error
+ * their own wallet (Meteor supports signMessage; OKX may not - the error
  * is surfaced, not swallowed). The signed payload is POSTed to the
  * relayer server, which verifies the signature off-chain, checks the
  * nonce, and submits `create_invoice_meta` to the contract from the
@@ -13,7 +13,7 @@
  * `set_relayer(null)`). The relayer verifies the NEP-413 signature
  * off-chain AND the contract re-verifies it on-chain (M-01), so a
  * compromised relayer cannot forge an invoice for a seller whose key
- * it does not hold — see relayer-server/ for the reference server,
+ * it does not hold - see relayer-server/ for the reference server,
  * including how it checks the signer's key against the account's
  * on-chain access keys and reconstructs the Borsh-serialized NEP-413
  * payload. The contract enforces replay protection with a per-seller
@@ -27,11 +27,16 @@
  * can only ever create one invoice: replaying the same signed payload
  * reuses the same counter, and the contract rejects it.
  *
- * NO relayer server is running yet. Set VITE_RELAYER_URL (e.g.
- * http://localhost:3001) to point at one — see relayer-server/README.
- * Until then `submitMetaTransaction` throws RelayerNotConfiguredError and
- * the UI falls back to a direct (user-pays-gas) create_invoice, which on
- * testnet costs a fraction of a cent.
+ * The relayer is live in production as Vercel serverless functions
+ * at https://twinnear.vercel.app/api (same logic as
+ * relayer-server/, shared core in frontend/api/relay/_core.mjs).
+ * Set VITE_RELAYER_URL to that URL to enable gasless creation; for
+ * local development point it at the standalone server instead
+ * (e.g. http://localhost:3001 - see relayer-server/README).
+ * Until a relayer is configured, `submitMetaTransaction` throws
+ * RelayerNotConfiguredError and the UI falls back to a direct
+ * (user-pays-gas) create_invoice, which on testnet costs a fraction
+ * of a cent.
  *
  * Canonical message format (must match relayer-server/ exactly):
  *   twinnear:create_invoice|<seller>|<client>|<amountYocto>|<description>|<counter>|<nonceBase64>
@@ -72,7 +77,7 @@ export interface MetaPayload {
   nonceBytes: Uint8Array;
   /** Canonical message the wallet signs (NEP-413 `message` field). */
   message: string;
-  /** NEP-413 recipient — the contract account. */
+  /** NEP-413 recipient - the contract account. */
   recipient: string;
 }
 
@@ -115,7 +120,7 @@ export interface SignedMetaPayload {
 
 /**
  * Sign the meta payload in the user's wallet (NEP-413). The wallet never
- * exposes the private key — it only returns the signature.
+ * exposes the private key - it only returns the signature.
  */
 export async function signMetaPayload(
   payload: MetaPayload,
