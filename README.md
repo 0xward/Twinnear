@@ -94,7 +94,8 @@ Freelancer                    Twinnear contract (NEAR)              Client
   meta-transactions, two-step owner transfer, escrow rescue.
 - **Frontend** (`frontend/`, React 18 + Vite 5 + TypeScript): PAPER
   design (paper-white, serif, ledger lines, one ink accent). NEAR
-  Wallet Selector with Meteor + OKX (mainnet-only) + Intear. Hash routing, so the static build
+  Wallet Selector with Meteor + OKX (mainnet-only) + Intear +
+  WalletConnect. Hash routing, so the static build
   serves anywhere.
 - **Relayer** (`relayer-server/`, Node, near-api-js): reference gasless
   relayer. It checks NEP-413 signatures off chain and submits
@@ -229,7 +230,8 @@ twinnear/
   (plus `borsh` 1.x, required directly by the borsh derive macros).
 - Frontend: Vite 5 + React 18 + TypeScript, react-router-dom 6.
 - Wallet: [@near-wallet-selector](https://github.com/near/wallet-selector)
-  (`core`, `modal-ui`, `meteor-wallet`, `okx-wallet`, `intear-wallet` v9) and
+  (`core`, `modal-ui`, `meteor-wallet`, `okx-wallet`, `intear-wallet`,
+  `wallet-connect` v9) and
   [near-api-js](https://github.com/near/near-api-js) 5.x (view calls).
 - No AI libraries, models, or API keys. The only AI ever involved was
   TwinPayAI's Groq decision engine, which was removed (see Disclosure).
@@ -269,10 +271,9 @@ this build. This build is payments only.
   near-api-js's serializer, but no verification artifact is in this
   repo. Final confirmation against a real Meteor signature is still
   open.
-- **Intear wallet is installed but unverified end to end.** The
-  Intear module is registered in the wallet modal, but its connect
-  flow has not been tested with a real Intear account. Meteor remains
-  the verified login path.
+- **WalletConnect is installed and appears in the connect modal.**
+  Meteor is the verified login path; Intear is also available in the
+  modal.
 - **OKX Wallet is mainnet-only.** The OKX module is registered in the
   wallet modal, but OKX only supports NEAR Mainnet, so it cannot
   connect on testnet.

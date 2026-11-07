@@ -1,5 +1,6 @@
 /**
- * NEAR connection layer: Wallet Selector (Meteor + OKX + Intear) for signing,
+ * NEAR connection layer: Wallet Selector (Meteor + OKX + Intear +
+ * WalletConnect) for signing,
  * near-api-js JsonRpcProvider for read-only view calls.
  *
  * No keys are ever handled here — signing happens inside the user's wallet.
@@ -40,17 +41,20 @@ async function loadSelectorDeps() {
     { setupMeteorWallet },
     { setupOKXWallet },
     { setupIntearWallet },
+    { setupWalletConnect },
   ] = await Promise.all([
     import("@near-wallet-selector/core"),
     import("@near-wallet-selector/meteor-wallet"),
     import("@near-wallet-selector/okx-wallet"),
     import("@near-wallet-selector/intear-wallet"),
+    import("@near-wallet-selector/wallet-connect"),
   ]);
   return {
     setupWalletSelector,
     setupMeteorWallet,
     setupOKXWallet,
     setupIntearWallet,
+    setupWalletConnect,
   };
 }
 
@@ -62,6 +66,7 @@ export function getSelector(): Promise<WalletSelector> {
         setupMeteorWallet,
         setupOKXWallet,
         setupIntearWallet,
+        setupWalletConnect,
       }) =>
         setupWalletSelector({
           network: NETWORK_ID,
@@ -69,6 +74,16 @@ export function getSelector(): Promise<WalletSelector> {
             setupMeteorWallet(),
             setupOKXWallet(),
             setupIntearWallet(),
+            setupWalletConnect({
+              projectId: "ea5f0fd20b26896045774900b7294b1a",
+              metadata: {
+                name: "Twinnear",
+                description: "Gasless freelancer invoicing on NEAR",
+                url: "https://twinnear.vercel.app",
+                icons: ["https://twinnear.vercel.app/logo.svg"],
+              },
+              chainId: "near:testnet",
+            }),
           ],
         }),
     );
