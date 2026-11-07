@@ -42,6 +42,7 @@
  *   twinnear:create_invoice|<seller>|<client>|<amountYocto>|<description>|<counter>|<nonceBase64>
  */
 
+import { Buffer } from "buffer";
 import { getSelector, getMetaNonce } from "./near";
 import { CONTRACT_ID } from "./config";
 
@@ -131,9 +132,13 @@ export async function signMetaPayload(
   try {
     signed = await wallet.signMessage({
       message: payload.message,
-      // Wallet Selector types this as Buffer; a Uint8Array works at
-      // runtime (Buffer extends Uint8Array).
-      nonce: payload.nonceBytes as never,
+      // NEP-413 requires a real Buffer of exactly 32 bytes. A plain
+      // Uint8Array (from crypto.getRandomValues) is NOT a Buffer:
+      // Buffer.isBuffer() returns false for it, and the wallet rejects
+      // it with "Invalid nonce. It must be a Buffer with a length of
+      // 32 bytes." Buffer.from() copies the same 32 bytes into a real
+      // Buffer, so the signed bytes are unchanged.
+      nonce: Buffer.from(payload.nonceBytes),
       recipient: payload.recipient,
     });
   } catch (e) {
