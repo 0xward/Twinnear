@@ -220,8 +220,24 @@ export async function accountExists(accountId: string): Promise<boolean> {
       finality: "final",
     });
     return true;
-  } catch {
-    return false;
+  } catch (err) {
+    // Only a "does not exist" answer means the account is missing.
+    // A network failure, timeout, or any other RPC error is NOT proof
+    // the account is missing: rethrow it so the caller reports a
+    // network problem instead of wrongly claiming the account
+    // does not exist. (A real case: a slow mobile connection timed
+    // out the view_account call for 0xward.testnet, an account that
+    // exists, and the UI told the user it did not exist.)
+    const msg = err instanceof Error ? err.message.toLowerCase() : "";
+    if (
+      msg.includes("does not exist") ||
+      msg.includes("doesn't exist") ||
+      msg.includes("account not found") ||
+      msg.includes("unknown account")
+    ) {
+      return false;
+    }
+    throw err;
   }
 }
 
