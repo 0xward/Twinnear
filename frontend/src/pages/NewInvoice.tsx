@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   STORAGE_DEPOSIT_NEAR,
@@ -6,13 +6,17 @@ import {
   createInvoice,
   extractReturnU64,
   extractTxHash,
+  formatNear,
+  formatUsdc,
   getOpenInvoiceCount,
   getSignedInAccount,
   isAccountForNetwork,
   isPlainDecimalAmount,
+  isPlainUsdcAmount,
   isValidAccountId,
   listAllInvoices,
   parseNearAmount,
+  parseUsdcAmount,
   friendlyError,
 } from "../lib/near";
 import { EXPLORER_URL } from "../lib/config";
@@ -22,12 +26,27 @@ import {
   isRelayerConfigured,
   submitMetaTransaction,
 } from "../lib/relayer";
+import {
+  computeInvoiceTotal,
+  draftIsEmpty,
+  parseLineItemDraft,
+} from "../lib/invoiceMath";
+import type { LineItemDraft } from "../lib/invoiceMath";
+import type { Currency, LineItem } from "../lib/types";
+import FiatEstimate from "../components/FiatEstimate";
 
 type DueChoice = "7" | "14" | "30" | "none";
+
+const EMPTY_ROW: LineItemDraft = {
+  description: "",
+  quantity: "1",
+  unitPrice: "",
+};
 
 export default function NewInvoice() {
   const navigate = useNavigate();
   const [client, setClient] = useState("");
+  const [currency, setCurrency] = useState<Currency>("Near");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [dueChoice, setDueChoice] = useState<DueChoice>("14");
@@ -50,6 +69,77 @@ export default function NewInvoice() {
   // not 500 characters — an emoji counts as several bytes (QA L-09).
   const descriptionBytes = new TextEncoder().encode(description).length;
   const descriptionTooLong = descriptionBytes > 500;
+
+  // ---- F2: line items + tax ----
+  const [itemized, setItemized] = useState(false);
+  const [rows, setRows] = useState<LineItemDraft[]>([{ ...EMPTY_ROW }]);
+  const [taxPct, setTaxPct] = useState("");
+
+  const parseUnitPrice =
+    currency === "Usdc" ? parseUsdcAmount : parseNearAmount;
+  const formatUnit =
+    currency === "Usdc" ? formatUsdc : formatNear;
+
+  /** Parsed line items (valid rows only) + first row error, if any. */
+  const parsedItems = useMemo(() => {
+    const items: LineItem[] = [];
+    let rowError: string | null = null;
+    rows.forEach((row, i) => {
+      if (draftIsEmpty(row)) return;
+      const parsed = parseLineItemDraft(row, i + 1, parseUnitPrice);
+      if (parsed.error) {
+        rowError = rowError ?? parsed.error;
+        return;
+      }
+      if (parsed.item) items.push(parsed.item);
+    });
+    return { items, rowError };
+    // parseUnitPrice changes with currency; rows/tax drive the rest.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, currency]);
+
+  const taxBps = useMemo(() => {
+    const t = taxPct.trim();
+    if (t === "") return 0;
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 0 || n > 100) return null;
+    return Math.round(n * 100);
+  }, [taxPct]);
+
+  /** Live totals from the line items (BigInt, same math as the contract). */
+  const itemTotals = useMemo(
+    () =>
+      computeInvoiceTotal(
+        parsedItems.items,
+        taxBps === null ? 0 : taxBps,
+      ),
+    [parsedItems.items, taxBps],
+  );
+
+  /** The total the contract will assert, in the smallest unit. */
+  const computedTotalSmallest: string | null = useMemo(() => {
+    if (!itemized) {
+      const parsed =
+        currency === "Usdc"
+          ? parseUsdcAmount(amount.trim())
+          : parseNearAmount(amount.trim());
+      return parsed;
+    }
+    if (parsedItems.items.length === 0) return null;
+    return itemTotals.total;
+  }, [itemized, amount, currency, parsedItems.items, itemTotals.total]);
+
+  // Gasless (create_invoice_meta) only exists for single-line NEAR
+  // invoices without tax — the canonical NEP-413 message has no
+  // currency/items/tax fields (spec §1.4). Anything else hides the
+  // checkbox and explains why.
+  const gaslessAvailable =
+    currency === "Near" && !itemized && taxBps === 0;
+  const gaslessBlockedReason = !gaslessAvailable
+    ? currency === "Usdc"
+      ? "Gasless creation is only available for single-line NEAR invoices — USDC invoices are created directly."
+      : "Gasless creation is only available for single-line NEAR invoices without tax — itemized or taxed invoices are created directly."
+    : null;
 
   useEffect(() => {
     listAllInvoices()
@@ -85,6 +175,8 @@ export default function NewInvoice() {
     setClient("");
     setAmount("");
     setDescription("");
+    setRows([{ ...EMPTY_ROW }]);
+    setTaxPct("");
   }
 
   /** Re-check the on-chain state after a submit: refresh the open
@@ -115,12 +207,94 @@ export default function NewInvoice() {
     }
   }
 
-  async function submitDirect(account: string, clientTrimmed: string) {
-    return createInvoice(
+  /**
+   * Validate the form and build the exact `create_invoice` arguments.
+   * Throws a plain-language Error on the first problem found.
+   */
+  function buildCreateArgs(account: string): {
+    clientTrimmed: string;
+    totalSmallest: string;
+    items: LineItem[];
+    taxRateBps: number;
+  } {
+    const clientTrimmed = client.trim();
+    if (!isValidAccountId(clientTrimmed)) {
+      throw new Error(
+        `"${clientTrimmed}" is not a valid NEAR account name (lowercase letters, digits, -, _, .).`,
+      );
+    }
+    if (!isAccountForNetwork(clientTrimmed)) {
+      throw new Error(
+        `On testnet the client must be a .testnet account — "${clientTrimmed}" cannot transact here.`,
+      );
+    }
+    if (clientTrimmed === account) {
+      throw new Error(
+        "You cannot invoice yourself — the client must be someone else.",
+      );
+    }
+    if (descriptionTooLong) {
+      throw new Error(
+        `Description is ${descriptionBytes} bytes — the contract allows at most 500 bytes.`,
+      );
+    }
+    if (itemized) {
+      if (parsedItems.rowError) throw new Error(parsedItems.rowError);
+      if (parsedItems.items.length === 0) {
+        throw new Error(
+          "Add at least one line item, or switch the itemized invoice off.",
+        );
+      }
+      if (parsedItems.items.length > 20) {
+        throw new Error(
+          "At most 20 line items per invoice (contract limit).",
+        );
+      }
+      if (taxBps === null) {
+        throw new Error("Tax must be a percentage between 0 and 100.");
+      }
+      return {
+        clientTrimmed,
+        totalSmallest: itemTotals.total,
+        items: parsedItems.items,
+        taxRateBps: taxBps,
+      };
+    }
+    const okAmount =
+      currency === "Usdc"
+        ? isPlainUsdcAmount(amount)
+        : isPlainDecimalAmount(amount);
+    if (!okAmount) {
+      throw new Error(
+        currency === "Usdc"
+          ? "Amount must be a plain decimal number greater than zero with at most 6 decimal places, e.g. 12.34."
+          : "Amount must be a plain decimal number greater than zero, e.g. 1.5.",
+      );
+    }
+    const totalSmallest = computedTotalSmallest;
+    if (!totalSmallest) throw new Error("Invalid amount");
+    return {
       clientTrimmed,
-      amount,
+      totalSmallest,
+      items: [],
+      taxRateBps: 0,
+    };
+  }
+
+  async function submitDirect() {
+    const account = await getSignedInAccount();
+    if (!account) {
+      throw new Error("Connect your wallet first — the button is at the top.");
+    }
+    const args = buildCreateArgs(account);
+    return createInvoice(
+      args.clientTrimmed,
+      args.totalSmallest,
       description.trim(),
       dueDays(),
+      currency,
+      args.items,
+      args.taxRateBps,
     );
   }
 
@@ -136,49 +310,21 @@ export default function NewInvoice() {
       setError("Connect your wallet first — the button is at the top.");
       return;
     }
-    const clientTrimmed = client.trim();
-    if (!isValidAccountId(clientTrimmed)) {
-      setError(
-        `"${clientTrimmed}" is not a valid NEAR account name (lowercase letters, digits, -, _, .).`,
-      );
-      return;
-    }
-    if (!isAccountForNetwork(clientTrimmed)) {
-      setError(
-        `On testnet the client must be a .testnet account — "${clientTrimmed}" cannot transact here.`,
-      );
-      return;
-    }
-    if (clientTrimmed === account) {
-      setError("You cannot invoice yourself — the client must be someone else.");
-      return;
-    }
-    if (!isPlainDecimalAmount(amount)) {
-      setError("Amount must be a plain decimal number greater than zero, e.g. 1.5.");
-      return;
-    }
-    if (descriptionTooLong) {
-      setError(
-        `Description is ${descriptionBytes} bytes — the contract allows at most 500 bytes.`,
-      );
-      return;
-    }
     setBusy(true);
     try {
       // The client must exist, or the invoice can never be paid.
-      if (!(await accountExists(clientTrimmed))) {
+      const args = buildCreateArgs(account);
+      if (!(await accountExists(args.clientTrimmed))) {
         throw new Error(
-          `Client account ${clientTrimmed} does not exist on testnet — check the spelling.`,
+          `Client account ${args.clientTrimmed} does not exist on testnet — check the spelling.`,
         );
       }
-      if (gasless) {
-        const amountYocto = parseNearAmount(amount.trim());
-        if (!amountYocto) throw new Error("Invalid amount");
+      if (gasless && gaslessAvailable) {
         try {
           const result = await submitMetaTransaction({
             seller: account,
-            client: clientTrimmed,
-            amountYocto,
+            client: args.clientTrimmed,
+            amountYocto: args.totalSmallest,
             description: description.trim(),
             dueDays: dueDays(),
           });
@@ -196,7 +342,15 @@ export default function NewInvoice() {
           throw err;
         }
       } else {
-        const res = await submitDirect(account, clientTrimmed);
+        const res = await createInvoice(
+          args.clientTrimmed,
+          args.totalSmallest,
+          description.trim(),
+          dueDays(),
+          currency,
+          args.items,
+          args.taxRateBps,
+        );
         showCreated(extractTxHash(res), extractReturnU64(res));
       }
     } catch (err) {
@@ -219,7 +373,7 @@ export default function NewInvoice() {
     }
     setBusy(true);
     try {
-      const res = await submitDirect(account, client.trim());
+      const res = await submitDirect();
       showCreated(extractTxHash(res), extractReturnU64(res));
     } catch (err) {
       setError(friendlyError(err));
@@ -228,12 +382,26 @@ export default function NewInvoice() {
     }
   }
 
+  function setRow(i: number, patch: Partial<LineItemDraft>) {
+    setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  }
+
+  const amountLabel =
+    currency === "Usdc" ? "Amount (USDC)" : "Amount (NEAR)";
+  const unitLabel = currency === "Usdc" ? "USDC" : "NEAR";
+  const previewTotal =
+    computedTotalSmallest !== null
+      ? `${formatUnit(computedTotalSmallest)} ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`
+      : `— ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`;
+
   return (
     <div className="card">
       <h2>New invoice</h2>
       <p className="sub">
-        You are the seller. The client pays the exact amount; funds are held
-        in escrow by the contract until you release them — or refund them.
+        You are the seller. The client pays the exact amount; NEAR funds
+        are held in escrow by the contract until you release them — or
+        refund them. USDC invoices settle straight to you via 1Click,
+        with no escrow.
       </p>
       {openCount !== null && (
         <p className="muted" style={{ marginTop: -6 }}>
@@ -305,15 +473,178 @@ export default function NewInvoice() {
             <option key={c} value={c} />
           ))}
         </datalist>
-        <label htmlFor="amount">Amount (NEAR)</label>
-        <input
-          id="amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="1.5"
-          inputMode="decimal"
-          autoComplete="off"
-        />
+
+        <fieldset className="currency-toggle" aria-label="Invoice currency">
+          <legend>Currency</legend>
+          <label className={currency === "Near" ? "seg active" : "seg"}>
+            <input
+              type="radio"
+              name="currency"
+              value="Near"
+              checked={currency === "Near"}
+              onChange={() => setCurrency("Near")}
+            />
+            NEAR — escrow
+          </label>
+          <label className={currency === "Usdc" ? "seg active" : "seg"}>
+            <input
+              type="radio"
+              name="currency"
+              value="Usdc"
+              checked={currency === "Usdc"}
+              onChange={() => setCurrency("Usdc")}
+            />
+            USDC — via 1Click
+          </label>
+        </fieldset>
+        {currency === "Usdc" ? (
+          <p className="muted" style={{ marginTop: 8 }}>
+            USDC invoices settle via 1Click to the seller (no escrow, no
+            spend-guard amount cap). 1Click has no testnet — on testnet
+            the flow is shown with the existing external-payment
+            confirmation.
+          </p>
+        ) : (
+          <p className="muted" style={{ marginTop: 8 }}>
+            NEAR invoices are paid into escrow: the client pays the exact
+            amount, and you release it or refund it. Your client&apos;s
+            spend-guard rules (if any) apply.
+          </p>
+        )}
+
+        {!itemized ? (
+          <>
+            <label htmlFor="amount">{amountLabel}</label>
+            <input
+              id="amount"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder={currency === "Usdc" ? "12.34" : "1.5"}
+              inputMode="decimal"
+              autoComplete="off"
+            />
+          </>
+        ) : (
+          <>
+            <div className="label-row">
+              <span className="label">Line items</span>
+              <span className="muted">
+                {parsedItems.items.length} item
+                {parsedItems.items.length === 1 ? "" : "s"} · max 20
+              </span>
+            </div>
+            <div className="line-items">
+              <div className="line-item-head" aria-hidden="true">
+                <span>Description</span>
+                <span>Qty</span>
+                <span>Unit price ({unitLabel})</span>
+                <span />
+              </div>
+              {rows.map((row, i) => (
+                <div className="line-item-row" key={i}>
+                  <input
+                    value={row.description}
+                    onChange={(e) =>
+                      setRow(i, { description: e.target.value })
+                    }
+                    placeholder="Design work — landing page"
+                    aria-label={`Line item ${i + 1} description`}
+                    autoComplete="off"
+                  />
+                  <input
+                    value={row.quantity}
+                    onChange={(e) => setRow(i, { quantity: e.target.value })}
+                    placeholder="1"
+                    inputMode="numeric"
+                    aria-label={`Line item ${i + 1} quantity`}
+                    autoComplete="off"
+                  />
+                  <input
+                    value={row.unitPrice}
+                    onChange={(e) => setRow(i, { unitPrice: e.target.value })}
+                    placeholder={currency === "Usdc" ? "12.34" : "1.5"}
+                    inputMode="decimal"
+                    aria-label={`Line item ${i + 1} unit price in ${unitLabel}`}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-small"
+                    onClick={() =>
+                      setRows((prev) =>
+                        prev.length > 1
+                          ? prev.filter((_, j) => j !== i)
+                          : [{ ...EMPTY_ROW }],
+                      )
+                    }
+                    disabled={rows.length === 1 && draftIsEmpty(row)}
+                    aria-label={`Remove line item ${i + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="row" style={{ marginTop: 10 }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-small"
+                onClick={() => setRows((prev) => [...prev, { ...EMPTY_ROW }])}
+                disabled={rows.length >= 20}
+              >
+                + Add line
+              </button>
+            </div>
+            {parsedItems.rowError && (
+              <div className="error" role="alert" style={{ marginTop: 12 }}>
+                {parsedItems.rowError}
+              </div>
+            )}
+            <label htmlFor="taxPct">Tax (%)</label>
+            <input
+              id="taxPct"
+              value={taxPct}
+              onChange={(e) => setTaxPct(e.target.value)}
+              placeholder="0"
+              inputMode="decimal"
+              autoComplete="off"
+              aria-describedby="tax-note"
+            />
+            <p className="muted" id="tax-note" style={{ marginTop: 6 }}>
+              0–100%. Tax = subtotal × rate, rounded down to the smallest
+              unit — the same math the contract enforces on-chain.
+            </p>
+            {taxBps === null && (
+              <div className="error" role="alert">
+                Tax must be a percentage between 0 and 100.
+              </div>
+            )}
+          </>
+        )}
+
+        <p className="muted" style={{ marginTop: 12 }}>
+          <label
+            style={{
+              display: "inline",
+              textTransform: "none",
+              letterSpacing: 0,
+              fontSize: 14,
+              fontWeight: 400,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={itemized}
+              onChange={(e) => {
+                setItemized(e.target.checked);
+                if (e.target.checked && gasless) setGasless(false);
+              }}
+              style={{ width: "auto", marginRight: 8 }}
+            />
+            Itemized invoice — line items + tax instead of one amount.
+          </label>
+        </p>
+
         <label htmlFor="description">Description</label>
         <textarea
           id="description"
@@ -359,24 +690,30 @@ export default function NewInvoice() {
           <button className="btn" type="submit" disabled={busy}>
             {busy
               ? "Waiting for wallet…"
-              : gasless
+              : gasless && gaslessAvailable
                 ? "Create invoice (gasless)"
                 : "Create invoice"}
           </button>
         </div>
         {isRelayerConfigured() ? (
-          <p className="muted" style={{ marginTop: 12 }}>
-            <label style={{ display: "inline", textTransform: "none", letterSpacing: 0, fontSize: 14, fontWeight: 400 }}>
-              <input
-                type="checkbox"
-                checked={gasless}
-                onChange={(e) => setGasless(e.target.checked)}
-                style={{ width: "auto", marginRight: 8 }}
-              />
-              Create gaslessly — a relayer submits this for you (you only
-              sign a message, no gas).
-            </label>
-          </p>
+          gaslessAvailable ? (
+            <p className="muted" style={{ marginTop: 12 }}>
+              <label style={{ display: "inline", textTransform: "none", letterSpacing: 0, fontSize: 14, fontWeight: 400 }}>
+                <input
+                  type="checkbox"
+                  checked={gasless}
+                  onChange={(e) => setGasless(e.target.checked)}
+                  style={{ width: "auto", marginRight: 8 }}
+                />
+                Create gaslessly — a relayer submits this for you (you only
+                sign a message, no gas).
+              </label>
+            </p>
+          ) : (
+            <p className="muted" style={{ marginTop: 12 }}>
+              {gaslessBlockedReason}
+            </p>
+          )
         ) : (
           <p className="muted" style={{ marginTop: 12 }}>
             Gasless relay is not configured (no relayer server at
@@ -386,33 +723,62 @@ export default function NewInvoice() {
         )}
       </form>
       <hr className="rule" />
-      {(client.trim() || amount.trim() || description.trim()) && (
+      {(client.trim() || amount.trim() || description.trim() || itemized) && (
         <div className="preview" aria-live="polite">
           <div className="label" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-faint)", fontWeight: 600 }}>
             Preview — how the client will see it
           </div>
           <div className="preview-amount">
-            {amount.trim() && Number(amount) > 0 ? `${amount.trim()} Ⓝ` : "— Ⓝ"}
+            {previewTotal}
           </div>
+          {itemized && parsedItems.items.length > 0 && (
+            <dl className="kv" style={{ marginTop: 8 }}>
+              <dt>Subtotal</dt>
+              <dd>
+                {formatUnit(itemTotals.subtotal)} {unitLabel === "NEAR" ? "Ⓝ" : "USDC"}
+              </dd>
+              <dt>Tax ({taxBps === null ? "?" : (taxBps / 100).toString()}%)</dt>
+              <dd>
+                {formatUnit(itemTotals.taxAmount)} {unitLabel === "NEAR" ? "Ⓝ" : "USDC"}
+              </dd>
+              <dt>Total</dt>
+              <dd>
+                {formatUnit(itemTotals.total)} {unitLabel === "NEAR" ? "Ⓝ" : "USDC"}
+              </dd>
+            </dl>
+          )}
           <p className="preview-meta">
             {description.trim() || "No description yet"}
             {client.trim() ? ` · billed to ${client.trim()}` : ""}
           </p>
           <p className="preview-meta">
-            Reference assigned on-chain (TW-YYYY-NNNN) · payable by NEAR or,
-            on mainnet, from another chain via 1Click.
+            Reference assigned on-chain (TW-YYYY-NNNN) ·{" "}
+            {currency === "Usdc"
+              ? "payable via 1Click on mainnet; on testnet, confirmed as an external payment."
+              : "payable by NEAR or, on mainnet, from another chain via 1Click."}
             {dueChoice === "none"
               ? " · No payment deadline."
               : ` · Due in ${dueChoice} days.`}
           </p>
+          {computedTotalSmallest !== null && (
+            <p className="preview-meta">
+              <FiatEstimate
+                amountSmallestUnit={computedTotalSmallest}
+                currency={currency}
+              />{" "}
+              Estimate only — not the settlement rate.
+            </p>
+          )}
         </div>
       )}
       <p className="muted" style={{ marginTop: 14 }}>
         Spend-guard: if the client set a policy (max amount per invoice, or
-        an allowlist of sellers), this invoice is rejected on-chain when it
-        breaks that policy. Multi-chain settlement via 1Click/Intents lives
-        on the pay page (mainnet only — 1Click has no testnet); gasless
-        creation via the relayer is available above when configured.
+        an allowlist of sellers), a NEAR invoice is rejected on-chain when
+        it breaks that policy. USDC invoices skip the amount and daily
+        caps (different units) but the seller allowlist still applies.
+        Multi-chain settlement via 1Click/Intents lives on the pay page
+        (mainnet only — 1Click has no testnet); gasless creation via the
+        relayer is available above when configured.
       </p>
     </div>
   );

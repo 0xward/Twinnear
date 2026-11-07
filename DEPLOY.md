@@ -4,17 +4,23 @@ Target account: **`twinnear.testnet`** (created in Meteor Wallet, funded
 with 4 NEAR from the faucet — 0.2 NEAR is the storage reserve, ~3.8 NEAR
 usable).
 
-There are two ways to deploy. **The browser path is recommended** — it
-signs in your own wallet and never touches a private key.
+Contract status: **v1 LIVE** since 2026-11-07 (deployed via Termux +
+near-cli-rs, wasm 194,009 bytes, SHA-256
+`5c1c22243b9ce154d7f31da2d34185067208d2030647060a2869d1f6c6e09b1b`).
+The v2 upgrade is a **redeploy + migrate** — see "Redeploy + migrate
+(v2)" below. Never call `new` again after the first deploy.
 
-## Path A — deploy from the browser (recommended)
+There are two ways to deploy. **The browser path is BLOCKED by
+Meteor** — it refuses the DeployContract action ("Contract deployment
+blocked"). The CLI path is the one that works.
 
-1. Build the contract (already done here, but rebuild after any change):
+## Path A — deploy from the browser (BLOCKED by Meteor, not recommended)
+
+1. Build the contract:
    ```bash
    cd contract
    ./build-optimized.sh
-   # → twinnear.wasm (193 KB optimized, sha256 below)
-   #    (raw cargo output stays at target/wasm32-unknown-unknown/release/twinnear.wasm)
+   # → twinnear.wasm
    ```
 2. Run the frontend:
    ```bash
@@ -24,30 +30,20 @@ signs in your own wallet and never touches a private key.
    ```
 3. Open the app, connect **Meteor Wallet** with the `twinnear.testnet`
    account, go to the **Deploy** page.
-4. Pick `contract/twinnear.wasm` (the optimized deploy artifact)
-   in the file picker. The page shows its size and SHA-256 — check it
-   matches the build below.
+4. Pick `contract/twinnear.wasm` in the file picker. The page shows
+   its size and SHA-256 — check it matches the build below.
 5. Click **Deploy + initialize**. One wallet-signed transaction sends
    `DeployContract` + init `new` (owner `twinnear.testnet`).
 6. Press **Verify** — the page checks the contract exists and reads the
    owner back with `get_owner`.
 
-Current build (2026-11-07, phase 2 + QA fixes, optimized):
-- Size: **194,009 bytes** (raw cargo build 242,681 bytes after `strip`)
-- SHA-256: `5c1c22243b9ce154d7f31da2d34185067208d2030647060a2869d1f6c6e09b1b`
-- 40/40 unit tests pass (was 12 before the QA-fix contract changes).
+> ⚠️ **Meteor blocks this path.** When the DeployContract action is
+> signed, Meteor shows "Contract deployment blocked" and the Approve
+> button stays disabled (verified 2026-11-07). The form stays on the
+> page for other wallets, or in case Meteor changes its policy — but
+> do not plan a demo around it. Use Path B.
 
-> Storage: a 193 KB wasm locks ~1.9 NEAR of storage stake on
-> the account (1 NEAR per 100 KB). With 4 NEAR in the account, about
-> 2.1 NEAR stays liquid after deploy — keep demo invoices small
-> (0.05–0.1 NEAR) and top the account up from the faucet again if it
-> runs low: https://near-faucet.io
-
-> Status: the Deploy page is implemented but **not yet verified with a
-> live wallet click-through** (phase-3 item). If the browser deploy
-> fails, use Path B.
-
-## Path B — deploy from the terminal (near-cli-rs)
+## Path B — deploy from the terminal (near-cli-rs) ✅ the working path
 
 Install the CLI once. The reliable path is the official prebuilt
 release (compiling from source with `cargo install near-cli-rs` takes
@@ -72,17 +68,14 @@ near --version   # → near-cli-rs 0.31.1
 TMPDIR=$HOME/.tmp-build`, or the build dies on `/tmp` space.)
 
 **Key handling — read this first.** The CLI signs with a key from the
-local OS keychain (`sign-with-keychain`). The `twinnear.testnet` key
-currently lives only in Meteor Wallet on the user's phone, so before
-the CLI can sign you must import it yourself on your own machine:
+local OS keychain. The `twinnear.testnet` key currently lives only in
+Meteor Wallet on the user's phone, so before the CLI can sign you must
+import it yourself on your own machine:
 
 ```bash
 # Do this on YOUR OWN machine, with YOUR OWN key. Never send the
 # private key or seed phrase to anyone, including this agent.
-near account import-account using-private-key \
-  --account-id twinnear.testnet \
-  --private-key 'ed25519:...' \
-  network-config testnet
+near account import-account using-private-key 'ed25519:...' twinnear.testnet network-config testnet save-to-legacy-keychain
 ```
 
 Then deploy — deploy + init in ONE command (H-05). The contract's
@@ -112,6 +105,63 @@ near contract call-function as-read-only twinnear.testnet get_invoice_count \
   json-args '{}' network-config testnet now
 # → 0
 ```
+
+## Termux (phone) — the path that deployed v1
+
+The user's phone runs the deploy from Termux (proot-distro Ubuntu),
+because the desktop binary is x86_64 and the phone is aarch64:
+
+- Ubuntu in proot-distro, near-cli-rs **aarch64** binary, version
+  **0.31.1**, SHA-256
+  `13d3103aa850294e6b9a2ed7832eb2abbcdf91986935b7edee80c304cef502ac`.
+- Headless / no OS keychain on Termux, so sign with the **legacy
+  keychain**: `sign-with-legacy-keychain` (desktop uses
+  `sign-with-keychain`). Import the key the same way, ending in
+  `save-to-legacy-keychain` (see Path B above).
+
+## Redeploy + migrate (v2 upgrade)
+
+The v1 contract is already live with real invoices. The upgrade
+replaces the code and migrates the state in place — the ledger
+survives. Two steps, both from the CLI:
+
+```bash
+# 1. Deploy the v2 wasm WITHOUT init — no prepaid-gas / attached-deposit
+#    arguments here: `without-init-call` takes none, the chain goes
+#    straight to network-config. (Verified against near-cli-rs 0.31.1
+#    --help, 2026-11-07.)
+near contract deploy twinnear.testnet use-file twinnear.wasm without-init-call network-config testnet sign-with-legacy-keychain send
+
+# 2. Migrate the state (owner only, one tx). Converts every v1 invoice
+#    to the v2 shape (currency=Near, items=[], tax=0, subtotal=amount).
+near contract call-function as-transaction twinnear.testnet migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' sign-as twinnear.testnet network-config testnet sign-with-legacy-keychain send
+
+# 3. Verify:
+near contract call-function as-read-only twinnear.testnet get_version json-args '{}' network-config testnet now
+# → 2
+near contract call-function as-read-only twinnear.testnet get_invoice json-args '{"id": 1}' network-config testnet now
+# → invoice #1 intact (same amount, description, status, due date)
+```
+
+> ⚠️ **Never call `new` again after a redeploy.** `new` re-initializes
+> the contract and would wipe the ledger. The Deploy page's
+> "Redeploy code only (no init)" button sends DeployContract alone;
+> `migrate` still has to run from the CLI afterwards.
+
+Current build (v1, 2026-11-07, phase 2 + QA fixes, optimized):
+- Size: **194,009 bytes** (raw cargo build 242,681 bytes after `strip`)
+- SHA-256: `5c1c22243b9ce154d7f31da2d34185067208d2030647060a2869d1f6c6e09b1b`
+- 40/40 unit tests pass (was 12 before the QA-fix contract changes).
+
+The v2 wasm SHA will be published by the coordinator when the
+contract build lands — update `EXPECTED_WASM_SHA256` in
+`frontend/src/lib/config.ts` then (never guess it).
+
+> Storage: a ~194 KB wasm locks ~1.9 NEAR of storage stake on
+> the account (1 NEAR per 100 KB). With 4 NEAR in the account, about
+> 2.1 NEAR stays liquid after deploy — keep demo invoices small
+> (0.05–0.1 NEAR) and top the account up from the faucet again if it
+> runs low: https://near-faucet.io
 
 ## After deploy — wire up the relayer (optional, for gasless)
 
@@ -147,9 +197,13 @@ To disable the relayer later: `set_relayer` with `{"relayer": null}`.
   from the faucet.
 - **"account does not exist"**: the account was never created, or the
   name is wrong — it must be exactly `twinnear.testnet`.
-- **Browser deploy shows a wallet error about DeployContract**: the
-  connected wallet may not support the DeployContract action — use
-  Path B instead and report the exact error.
+- **Browser deploy shows a wallet error about DeployContract**: Meteor
+  blocks the DeployContract action — use Path B instead and report the
+  exact error.
 - **`cargo install near-cli-rs` fails with "No space left on device"**:
   the install uses a large temp dir. Set `TMPDIR` to a roomy directory
   first (this VM: `export TMPDIR=$HOME/.tmp-build`) and retry.
+- **`migrate` fails with "only the owner can migrate"**: the call must
+  be signed as `twinnear.testnet` (the `sign-as` in the command above).
+- **`get_version` returns nothing / "method not found"**: the v2 code
+  has not landed yet — redeploy first, then migrate.

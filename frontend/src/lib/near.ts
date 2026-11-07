@@ -197,15 +197,24 @@ export async function accountExists(accountId: string): Promise<boolean> {
  * True when the contract account actually has code deployed (H-01).
  * Uses `view_code`: an account that merely EXISTS (e.g. the funded but
  * not-yet-deployed twinnear.testnet) correctly reports false.
+ *
+ * Banner root cause (verified 2026-11-07 via raw RPC): the raw
+ * `view_code` response returns the field `code_base64`, NOT `code`.
+ * The old code read `res.code` (always undefined) and always reported
+ * "not deployed". Read `code_base64` first, fall back to `code`.
  */
 export async function isContractDeployed(): Promise<boolean> {
   try {
-    const res = await rpcQuery<{ code?: string }>("query", {
-      request_type: "view_code",
-      account_id: CONTRACT_ID,
-      finality: "final",
-    });
-    return typeof res.code === "string" && res.code.length > 0;
+    const res = await rpcQuery<{ code_base64?: string; code?: string }>(
+      "query",
+      {
+        request_type: "view_code",
+        account_id: CONTRACT_ID,
+        finality: "final",
+      },
+    );
+    const code = res.code_base64 ?? res.code;
+    return typeof code === "string" && code.length > 0;
   } catch {
     return false;
   }
@@ -215,14 +224,69 @@ export async function listInvoices(
   fromIndex = 1,
   limit = 100,
 ): Promise<Invoice[]> {
-  return (await viewCall("list_invoices", {
+  const raw = (await viewCall("list_invoices", {
     from_index: fromIndex,
     limit,
   })) as Invoice[];
+  return raw.map(normalizeInvoice);
 }
 
 export async function getInvoice(id: number): Promise<Invoice | null> {
-  return (await viewCall("get_invoice", { id })) as Invoice | null;
+  const raw = (await viewCall("get_invoice", { id })) as Invoice | null;
+  return raw === null ? null : normalizeInvoice(raw);
+}
+
+/**
+ * Fill in the v2 fields for invoices read from a v1 contract (or any
+ * view response that predates them): a v1 invoice is a single-line
+ * NEAR invoice with no tax. Without this, `inv.currency` would be
+ * undefined on the live v1 contract and every currency-aware page
+ * would break before the v2 upgrade lands.
+ */
+export function normalizeInvoice(raw: Invoice): Invoice {
+  const currency = raw.currency ?? "Near";
+  const items = raw.items ?? [];
+  const taxRateBps = raw.tax_rate_bps ?? 0;
+  const subtotal = raw.subtotal ?? raw.amount;
+  const taxAmount = raw.tax_amount ?? "0";
+  return {
+    ...raw,
+    currency,
+    items,
+    tax_rate_bps: taxRateBps,
+    subtotal,
+    tax_amount: taxAmount,
+  };
+}
+
+/** True when the invoice is denominated in USDC (micro-USDC). */
+export function isUsdcInvoice(inv: Invoice): boolean {
+  return (inv.currency ?? "Near") === "Usdc";
+}
+
+/** Display symbol for an invoice's currency. */
+export function currencySymbol(currency: string): string {
+  return currency === "Usdc" ? "USDC" : "Ⓝ";
+}
+
+/**
+ * Format an invoice total in its own currency, e.g. "1.5 Ⓝ" or
+ * "12.34 USDC". Amounts are always shown in their native unit —
+ * never convert USDC micro-units as if they were yoctoNEAR.
+ */
+export function formatInvoiceAmount(inv: Invoice): string {
+  return isUsdcInvoice(inv)
+    ? `${formatUsdc(inv.amount)} USDC`
+    : `${formatNear(inv.amount)} Ⓝ`;
+}
+
+/** Contract schema version (v2 method; v1 has no such method). */
+export async function getVersion(): Promise<number | null> {
+  try {
+    return (await viewCall("get_version", {})) as number;
+  } catch {
+    return null;
+  }
 }
 
 export async function getPolicy(accountId: string): Promise<Policy | null> {
@@ -317,6 +381,22 @@ export async function deployContract(code: Uint8Array): Promise<unknown> {
   });
 }
 
+/**
+ * Redeploy (upgrade) the contract code WITHOUT initializing.
+ * DeployContract only — no `new` call, so the existing state (and
+ * owner) survives. After this lands, the state must be migrated with
+ * the owner-only `migrate` call via near-cli-rs (see DEPLOY.md) —
+ * NEVER call `new` again after a redeploy, it would wipe the ledger.
+ */
+export async function redeployContract(code: Uint8Array): Promise<unknown> {
+  const selector = await getSelector();
+  const wallet = await selector.wallet();
+  return wallet.signAndSendTransaction({
+    receiverId: CONTRACT_ID,
+    actions: [{ type: "DeployContract", params: { code } }],
+  });
+}
+
 const GAS_100_TGAS = "100000000000000"; // wallet-selector v8 expects strings
 
 async function callContract(
@@ -377,18 +457,35 @@ export const STORAGE_DEPOSIT_NEAR = "0.01";
 /**
  * Create an invoice for `client`, attaching the 0.01 NEAR storage
  * deposit (H-06). `dueDays`: 1–90, or null for no deadline.
+ *
+ * v2 signature (contract/src/lib.rs): `amount` is the TOTAL
+ * (subtotal + tax) in the invoice currency's smallest unit — yoctoNEAR
+ * for Near (use `parseNearAmount`), micro-USDC for Usdc (use
+ * `parseUsdcAmount`). `items` is [] for a single-line invoice and
+ * `taxRateBps` must be 0 then; with line items the contract asserts
+ * amount == subtotal + tax. The caller computes the total first
+ * (see `computeInvoiceTotal` in lib/invoiceMath.ts).
  */
 export async function createInvoice(
   client: string,
-  amountNear: string,
+  amountSmallestUnit: string,
   description: string,
   dueDays: number | null,
+  currency: "Near" | "Usdc" = "Near",
+  items: import("./types").LineItem[] = [],
+  taxRateBps = 0,
 ): Promise<unknown> {
-  const amountYocto = parseNearAmount(amountNear);
-  if (!amountYocto) throw new Error("Invalid amount");
   return callContract(
     "create_invoice",
-    { client, amount: amountYocto, description, due_days: dueDays },
+    {
+      client,
+      amount: amountSmallestUnit,
+      description,
+      due_days: dueDays,
+      currency,
+      items,
+      tax_rate_bps: taxRateBps,
+    },
     STORAGE_DEPOSIT_YOCTO,
   );
 }
@@ -464,6 +561,59 @@ function parseOptionalNear(value: string, label: string): string {
 }
 
 const YOCTO_PER_NEAR = 10n ** 24n;
+
+const MICRO_PER_USDC = 1_000_000n;
+
+/**
+ * Parse a decimal USDC amount ("12.34") to micro-USDC (6 decimals).
+ * Returns null for invalid input. Max 6 fractional digits — the same
+ * rule as parseNearAmount, at USDC's own precision.
+ */
+export function parseUsdcAmount(amount: string): string | null {
+  const s = amount.trim();
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const [whole, frac = ""] = s.split(".");
+  if (frac.length > 6) return null;
+  const micro =
+    BigInt(whole) * MICRO_PER_USDC + BigInt(frac.padEnd(6, "0") || "0");
+  return micro.toString();
+}
+
+/** Strict decimal USDC amount, e.g. "12.34" — no exponents, max 6 decimals. */
+export function isPlainUsdcAmount(value: string): boolean {
+  const v = value.trim();
+  return /^\d+(\.\d{1,6})?$/.test(v) && Number(v) > 0;
+}
+
+/** Format a micro-USDC string as a short USDC amount, e.g. "12.34". */
+export function formatUsdc(micro: string): string {
+  let value: bigint;
+  try {
+    value = BigInt(micro);
+  } catch {
+    return "0";
+  }
+  const whole = value / MICRO_PER_USDC;
+  const frac = value % MICRO_PER_USDC;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(6, "0").replace(/0+$/, "");
+  return `${whole}.${fracStr}`;
+}
+
+/** Format a micro-USDC string at FULL precision (no rounding, for CSV). */
+export function formatUsdcFull(micro: string): string {
+  let value: bigint;
+  try {
+    value = BigInt(micro);
+  } catch {
+    return "0";
+  }
+  const whole = value / MICRO_PER_USDC;
+  const frac = value % MICRO_PER_USDC;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(6, "0").replace(/0+$/, "");
+  return `${whole}.${fracStr}`;
+}
 
 /**
  * Parse a decimal NEAR amount ("0.5") to a yoctoNEAR string.

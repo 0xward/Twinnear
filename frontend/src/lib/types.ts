@@ -1,12 +1,24 @@
-/** Types mirroring the Twinnear contract (contract/src/lib.rs). */
+/** Types mirroring the Twinnear contract (contract/src/lib.rs, v2). */
 
 export type InvoiceStatus = "Pending" | "Paid" | "Refunded" | "Cancelled";
+
+/** Invoice currency (contract v2). JSON: "Near" | "Usdc". */
+export type Currency = "Near" | "Usdc";
+
+export interface LineItem {
+  description: string;
+  quantity: number;
+  /** Unit price in the invoice currency's smallest unit
+   *  (yoctoNEAR for Near, micro-USDC for Usdc), as a decimal string. */
+  unit_price: string;
+}
 
 export interface Invoice {
   id: number;
   seller: string;
   client: string;
-  /** Amount in yoctoNEAR, as a decimal string. */
+  /** TOTAL amount (subtotal + tax) in the invoice currency's smallest
+   *  unit: yoctoNEAR for Near, micro-USDC (6 decimals) for Usdc. */
   amount: string;
   description: string;
   status: InvoiceStatus;
@@ -23,6 +35,16 @@ export interface Invoice {
   disputed: boolean;
   /** Dispute reason (max 200 bytes). Null when undisputed. */
   dispute_reason: string | null;
+  // ---- v2 fields (appended after dispute_reason in the contract) ----
+  currency: Currency;
+  /** Empty = single-line (legacy) invoice. */
+  items: LineItem[];
+  /** Tax rate in basis points, 0..=10000 (10000 = 100%). */
+  tax_rate_bps: number;
+  /** Sum of qty * unit_price (or = amount when items is empty). */
+  subtotal: string;
+  /** subtotal * tax_rate_bps / 10000 (0 when items is empty). */
+  tax_amount: string;
 }
 
 export interface Policy {

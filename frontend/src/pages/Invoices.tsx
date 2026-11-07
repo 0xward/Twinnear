@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { formatDate, formatNear, friendlyError, listAllInvoices } from "../lib/near";
+import { formatDate, formatInvoiceAmount, friendlyError, listAllInvoices } from "../lib/near";
 import { exportInvoicesCsv } from "../lib/csv";
 import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
+import { downloadInvoicePdf } from "../lib/invoicePdf";
+import CurrencyBadge from "../components/CurrencyBadge";
+import FiatEstimate from "../components/FiatEstimate";
 import type { Invoice, InvoiceStatus } from "../lib/types";
 
 export default function Invoices() {
@@ -131,6 +134,9 @@ export default function Invoices() {
                 <th scope="col">
                   <span className="visually-hidden">Open invoice</span>
                 </th>
+                <th scope="col">
+                  <span className="visually-hidden">Download PDF</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -141,7 +147,15 @@ export default function Invoices() {
                   </td>
                   <td>{inv.client}</td>
                   <td>{inv.description}</td>
-                  <td className="num">{formatNear(inv.amount)} Ⓝ</td>
+                  <td className="num">
+                    <CurrencyBadge currency={inv.currency} />{" "}
+                    {formatInvoiceAmount(inv)}
+                    <br />
+                    <FiatEstimate
+                      amountSmallestUnit={inv.amount}
+                      currency={inv.currency}
+                    />
+                  </td>
                   <td>
                     <span className={stampClass(inv)}>
                       {statusLabel(inv)}
@@ -151,6 +165,15 @@ export default function Invoices() {
                   <td className="muted">{formatDate(inv.created_at)}</td>
                   <td>
                     <Link to={`/pay/${inv.id}`}>Open</Link>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-small"
+                      onClick={() => downloadInvoicePdf(inv)}
+                    >
+                      PDF
+                    </button>
                   </td>
                 </tr>
               ))}

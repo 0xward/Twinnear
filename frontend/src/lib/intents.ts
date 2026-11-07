@@ -38,6 +38,12 @@ const ONE_CLICK_BASE = "https://1click.chaindefuser.com/v0";
 /** wNEAR on NEAR — 24 decimals, same base units as NEAR. */
 export const WNEAR_ASSET = "nep141:wrap.near";
 
+/** USDC on NEAR (nep141) — 6 decimals, base unit is micro-USDC.
+ *  Destination asset for USDC invoices: 1Click delivers exactly the
+ *  invoice amount (in micro-USDC) straight to the seller. */
+export const USDC_NEAR_ASSET =
+  "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1";
+
 export interface IntentToken {
   assetId: string;
   symbol: string;
@@ -157,8 +163,9 @@ export interface QuoteIntentParams {
   /** Exact output the seller must receive, in destination base units
    *  (for wNEAR: yoctoNEAR, same as the invoice amount). */
   amountOutBaseUnits: string;
-  /** Destination asset id — WNEAR only for now (the invoice amount is
-   *  denominated in yoctoNEAR). */
+  /** Destination asset id — WNEAR for NEAR invoices (amount in
+   *  yoctoNEAR), USDC_NEAR_ASSET for USDC invoices (amount in
+   *  micro-USDC). */
   destinationAsset?: string;
   /** Seller's NEAR account (mainnet only — see assertMainnetRecipient). */
   recipient: string;

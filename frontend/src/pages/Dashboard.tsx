@@ -1,15 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { formatDate, formatNear, listAllInvoices } from "../lib/near";
+import {
+  formatDate,
+  formatInvoiceAmount,
+  formatNear,
+  formatUsdc,
+  isUsdcInvoice,
+  listAllInvoices,
+} from "../lib/near";
 import { exportInvoicesCsv } from "../lib/csv";
 import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
+import CurrencyBadge from "../components/CurrencyBadge";
+import FiatEstimate from "../components/FiatEstimate";
 import type { Invoice } from "../lib/types";
 
 interface ClientTotal {
   client: string;
   paidYocto: bigint;
   pendingYocto: bigint;
+  paidUsdcMicro: bigint;
+  pendingUsdcMicro: bigint;
   count: number;
   lastCreatedAt: number;
 }
@@ -44,35 +55,57 @@ export default function Dashboard() {
   const pending = invoices.filter((i) => i.status === "Pending");
   const refunded = invoices.filter((i) => i.status === "Refunded");
   const cancelled = invoices.filter((i) => i.status === "Cancelled");
+  // NEAR and USDC totals are kept separate — micro-USDC must never be
+  // added to yoctoNEAR. The stat cards below are NEAR totals; the USDC
+  // card (when any USDC invoice exists) shows the USDC side.
+  const usdcInvoices = invoices.filter(isUsdcInvoice);
+  const paidNear = paid.filter((i) => !isUsdcInvoice(i));
+  const pendingNear = pending.filter((i) => !isUsdcInvoice(i));
   // "Received" counts escrow releases only. External (1Click)
   // settlements are the seller's own attestation — unverified — so
   // they get their own total instead of inflating Received (M-02).
-  const receivedYocto = paid
+  const receivedYocto = paidNear
     .filter((i) => i.released && i.external_ref === null)
     .reduce((sum, i) => sum + BigInt(i.amount), 0n);
-  const externalYocto = paid
+  const externalYocto = paidNear
     .filter((i) => i.released && i.external_ref !== null)
     .reduce((sum, i) => sum + BigInt(i.amount), 0n);
-  const escrowYocto = paid
+  const escrowYocto = paidNear
     .filter((i) => !i.released)
     .reduce((sum, i) => sum + BigInt(i.amount), 0n);
-  const outstandingYocto = pending.reduce(
+  const outstandingYocto = pendingNear.reduce(
     (sum, i) => sum + BigInt(i.amount),
     0n,
   );
+  const usdcOutstandingMicro = pending
+    .filter(isUsdcInvoice)
+    .reduce((sum, i) => sum + BigInt(i.amount), 0n);
+  const usdcReceivedMicro = paid
+    .filter((i) => isUsdcInvoice(i) && i.released)
+    .reduce((sum, i) => sum + BigInt(i.amount), 0n);
 
   // Client directory: every client ever invoiced, not just paid ones.
+  // NEAR and USDC are tracked in separate columns — never added.
   const perClient = new Map<string, ClientTotal>();
   for (const inv of invoices) {
     const cur = perClient.get(inv.client) ?? {
       client: inv.client,
       paidYocto: 0n,
       pendingYocto: 0n,
+      paidUsdcMicro: 0n,
+      pendingUsdcMicro: 0n,
       count: 0,
       lastCreatedAt: 0,
     };
-    if (inv.status === "Paid") cur.paidYocto += BigInt(inv.amount);
-    if (inv.status === "Pending") cur.pendingYocto += BigInt(inv.amount);
+    const usdc = isUsdcInvoice(inv);
+    if (inv.status === "Paid") {
+      if (usdc) cur.paidUsdcMicro += BigInt(inv.amount);
+      else cur.paidYocto += BigInt(inv.amount);
+    }
+    if (inv.status === "Pending") {
+      if (usdc) cur.pendingUsdcMicro += BigInt(inv.amount);
+      else cur.pendingYocto += BigInt(inv.amount);
+    }
     cur.count += 1;
     cur.lastCreatedAt = Math.max(cur.lastCreatedAt, inv.created_at);
     perClient.set(inv.client, cur);
@@ -84,6 +117,14 @@ export default function Dashboard() {
         ? 1
         : -1,
   );
+
+  /** "1.5 Ⓝ" plus " · 12.00 USDC" when the client also has USDC. */
+  function clientCell(nearYocto: bigint, usdcMicro: bigint): string {
+    const parts: string[] = [];
+    if (nearYocto > 0n) parts.push(`${formatNear(nearYocto.toString())} Ⓝ`);
+    if (usdcMicro > 0n) parts.push(`${formatUsdc(usdcMicro.toString())} USDC`);
+    return parts.length > 0 ? parts.join(" · ") : "—";
+  }
 
   const recent = [...invoices]
     .sort((a, b) => b.created_at - a.created_at)
@@ -106,7 +147,11 @@ export default function Dashboard() {
             {formatNear(receivedYocto.toString())} Ⓝ
           </div>
           <div className="label" style={{ marginTop: 2 }}>
-            escrow released to you
+            escrow released to you ·{" "}
+            <FiatEstimate
+              amountSmallestUnit={receivedYocto.toString()}
+              currency="Near"
+            />
           </div>
         </div>
         <div className="stat">
@@ -123,6 +168,12 @@ export default function Dashboard() {
           <div className="value amount">
             {formatNear(escrowYocto.toString())} Ⓝ
           </div>
+          <div className="label" style={{ marginTop: 2 }}>
+            <FiatEstimate
+              amountSmallestUnit={escrowYocto.toString()}
+              currency="Near"
+            />
+          </div>
         </div>
         <div className="stat">
           <div className="label">Outstanding</div>
@@ -130,9 +181,30 @@ export default function Dashboard() {
             {formatNear(outstandingYocto.toString())} Ⓝ
           </div>
           <div className="label" style={{ marginTop: 2 }}>
-            {pending.length} unpaid invoice{pending.length === 1 ? "" : "s"}
+            {pendingNear.length} unpaid NEAR invoice
+            {pendingNear.length === 1 ? "" : "s"} ·{" "}
+            <FiatEstimate
+              amountSmallestUnit={outstandingYocto.toString()}
+              currency="Near"
+            />
           </div>
         </div>
+        {usdcInvoices.length > 0 && (
+          <div className="stat">
+            <div className="label">USDC (via 1Click)</div>
+            <div className="value amount">
+              {formatUsdc(usdcOutstandingMicro.toString())} USDC
+            </div>
+            <div className="label" style={{ marginTop: 2 }}>
+              outstanding · {formatUsdc(usdcReceivedMicro.toString())} USDC
+              received ·{" "}
+              <FiatEstimate
+                amountSmallestUnit={usdcOutstandingMicro.toString()}
+                currency="Usdc"
+              />
+            </div>
+          </div>
+        )}
         <div className="stat">
           <div className="label">Refunded</div>
           <div className="value amount">{refunded.length}</div>
@@ -142,6 +214,9 @@ export default function Dashboard() {
           <div className="value amount">{cancelled.length}</div>
         </div>
       </div>
+      <p className="muted" style={{ marginTop: -8, marginBottom: 18 }}>
+        Fiat amounts are estimates only — not the settlement rate.
+      </p>
 
       {error && <div className="error" role="alert">{error}</div>}
 
@@ -191,10 +266,10 @@ export default function Dashboard() {
                     </td>
                     <td className="num">{c.count}</td>
                     <td className="num">
-                      {formatNear(c.paidYocto.toString())} Ⓝ
+                      {clientCell(c.paidYocto, c.paidUsdcMicro)}
                     </td>
                     <td className="num">
-                      {formatNear(c.pendingYocto.toString())} Ⓝ
+                      {clientCell(c.pendingYocto, c.pendingUsdcMicro)}
                     </td>
                     <td className="muted">{formatDate(c.lastCreatedAt)}</td>
                   </tr>
@@ -239,7 +314,10 @@ export default function Dashboard() {
                       <span className="ref">{invoiceRef(inv)}</span>
                     </td>
                     <td>{inv.client}</td>
-                    <td className="num">{formatNear(inv.amount)} Ⓝ</td>
+                    <td className="num">
+                      <CurrencyBadge currency={inv.currency} />{" "}
+                      {formatInvoiceAmount(inv)}
+                    </td>
                     <td>
                       <span className={stampClass(inv)}>
                         {statusLabel(inv)}

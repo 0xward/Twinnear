@@ -12,6 +12,8 @@ const Invoices = lazy(() => import("./pages/Invoices"));
 const NewInvoice = lazy(() => import("./pages/NewInvoice"));
 const PayInvoice = lazy(() => import("./pages/PayInvoice"));
 const PolicyPage = lazy(() => import("./pages/Policy"));
+const Portal = lazy(() => import("./pages/Portal"));
+const Recurring = lazy(() => import("./pages/Recurring"));
 
 function PageFallback() {
   return (
@@ -49,6 +51,8 @@ export default function App() {
         </NavLink>
         <NavLink to="/invoices">Invoices</NavLink>
         <NavLink to="/invoices/new">New invoice</NavLink>
+        <NavLink to="/recurring">Retainers</NavLink>
+        <NavLink to="/portal">Client portal</NavLink>
         <NavLink to="/settings">Spend guard</NavLink>
         <NavLink to="/deploy">Deploy</NavLink>
       </nav>
@@ -67,6 +71,8 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/new" element={<NewInvoice />} />
+          <Route path="/recurring" element={<Recurring />} />
+          <Route path="/portal" element={<Portal />} />
           <Route path="/pay/:id" element={<PayInvoice />} />
           <Route path="/settings" element={<PolicyPage />} />
           <Route path="/deploy" element={<Deploy />} />

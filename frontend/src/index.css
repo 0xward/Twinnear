@@ -739,6 +739,160 @@ fieldset.oneclick-disabled {
   margin-bottom: 18px;
 }
 
+/* ---- v2: currency toggle (segmented control) ---- */
+.currency-toggle {
+  border: 0;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.currency-toggle legend {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.currency-toggle .seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 8px 16px;
+  margin: 0 8px 0 0;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.currency-toggle .seg input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.currency-toggle .seg.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- v2: line-item editor ---- */
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 14px 0 6px;
+}
+
+.label-row .label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.line-items {
+  display: grid;
+  gap: 8px;
+}
+
+.line-item-head,
+.line-item-row {
+  display: grid;
+  grid-template-columns: 1fr 72px 130px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.line-item-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+.line-item-row input {
+  min-width: 0;
+}
+
+.btn-small {
+  min-height: 0;
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ---- v2: currency stamps ---- */
+.stamp-near {
+  color: var(--accent);
+  border-color: #9db8a7;
+  background: var(--accent-soft);
+}
+
+.stamp-usdc {
+  color: #6b4d1f;
+  border-color: #d9c48a;
+  background: #fbf4dd;
+}
+
+/* ---- v2: fiat estimate ---- */
+.fiat-est {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.amount .fiat-est {
+  font-size: 15px;
+}
+
+/* ---- v2: CLI command block (Deploy) ---- */
+.cli-block {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0 0;
+  overflow-x: auto;
+}
+
+/* ---- invoice table footer (line items) ---- */
+table.ledger tfoot td {
+  padding: 10px;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: none;
+  font-size: 14px;
+}
+
+table.ledger tfoot tr:last-child td {
+  font-family: var(--serif);
+  font-size: 15px;
+}
+
 /* ---- responsive ---- */
 @media (max-width: 640px) {
   body {
@@ -811,6 +965,15 @@ fieldset.oneclick-disabled {
 
   .pay-share {
     flex-direction: column;
+  }
+
+  .line-item-head,
+  .line-item-row {
+    grid-template-columns: 1fr 56px 96px auto;
+  }
+
+  .line-item-head {
+    display: none;
   }
 }
 

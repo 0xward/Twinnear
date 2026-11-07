@@ -6,11 +6,14 @@ import {
   confirmExternalPayment,
   extractTxHash,
   formatDate,
+  formatInvoiceAmount,
   formatNear,
+  formatUsdc,
   friendlyError,
   getAccountBalance,
   getInvoice,
   getSignedInAccount,
+  isUsdcInvoice,
   openDispute,
   payInvoice,
   refundInvoice,
@@ -20,6 +23,7 @@ import {
 import {
   MAINNET_ONLY_NOTE,
   SOURCE_ASSETS,
+  USDC_NEAR_ASSET,
   getSwapStatus,
   pollSwapStatus,
   quoteIntentSettlement,
@@ -28,9 +32,12 @@ import type { IntentQuote, SwapStatus } from "../lib/intents";
 import type { Invoice } from "../lib/types";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import CopyButton from "../components/CopyButton";
+import CurrencyBadge from "../components/CurrencyBadge";
+import FiatEstimate from "../components/FiatEstimate";
 import InvoiceTimeline from "../components/InvoiceTimeline";
 import PayQr from "../components/PayQr";
 import { buildReminderText, invoiceRef } from "../lib/invoiceRef";
+import { downloadInvoicePdf } from "../lib/invoicePdf";
 import { EXPLORER_URL } from "../lib/config";
 
 export default function PayInvoice() {
@@ -115,9 +122,11 @@ export default function PayInvoice() {
    * amount plus gas, so compare the client's LIVE available balance
    * first (same pattern as the Deploy page) instead of letting the
    * wallet fail with a generic error and burn gas.
+   * NEAR escrow only — USDC invoices never reach this button
+   * (they settle via 1Click, see below).
    */
   async function handlePay() {
-    if (!invoice || !account) return;
+    if (!invoice || !account || isUsdcInvoice(invoice)) return;
     try {
       const bal = await getAccountBalance(account);
       // Gas for a 100-Tgas function call at the minimum gas price is
@@ -154,6 +163,11 @@ export default function PayInvoice() {
       const q = await quoteIntentSettlement({
         sourceAsset,
         amountOutBaseUnits: invoice.amount,
+        // USDC invoices settle in USDC on NEAR (micro-USDC, the
+        // invoice amount as-is); NEAR invoices settle in wNEAR.
+        destinationAsset: isUsdcInvoice(invoice)
+          ? USDC_NEAR_ASSET
+          : undefined,
         recipient: invoice.seller,
         refundTo: refundTo.trim(),
         dry,
@@ -223,10 +237,14 @@ export default function PayInvoice() {
   const ref = invoiceRef(invoice);
   const reminderText = buildReminderText(
     ref,
-    `${formatNear(invoice.amount)} Ⓝ`,
+    formatInvoiceAmount(invoice),
     invoice.description,
     shareUrl,
   );
+  const isUsdc = isUsdcInvoice(invoice);
+  // 1Click destination label: USDC invoices settle in USDC on NEAR,
+  // NEAR invoices in wNEAR.
+  const destinationLabel = isUsdc ? "USDC" : "wNEAR";
   const sourceLabel =
     SOURCE_ASSETS.find((a) => a.assetId === sourceAsset)?.label ?? sourceAsset;
   const nowNs = Date.now() * 1_000_000;
@@ -250,7 +268,8 @@ export default function PayInvoice() {
           Invoice #{invoice.id}{" "}
           <span className={stampClass(invoice)}>
             {statusLabel(invoice)}
-          </span>
+          </span>{" "}
+          <CurrencyBadge currency={invoice.currency} />
           {overdue && (
             <span className="stamp stamp-refunded" style={{ marginLeft: 8 }}>
               Overdue
@@ -266,12 +285,24 @@ export default function PayInvoice() {
           <span className="ref">{ref}</span>
           {invoice.description ? ` · ${invoice.description}` : ""}
         </p>
+        {isClient && invoice.status === "Pending" && (
+          <p className="sub" style={{ marginTop: 8 }}>
+            This invoice is from {invoice.seller}. Pay the exact amount
+            below — {isUsdc
+              ? "your payment goes straight to the seller via 1Click."
+              : "your payment is held safely by the contract until the seller releases it, or refunds you."}
+          </p>
+        )}
       </div>
 
       <dl className="kv">
         <dt>Amount due</dt>
         <dd className="amount" style={{ fontSize: 26 }}>
-          {formatNear(invoice.amount)} Ⓝ
+          {formatInvoiceAmount(invoice)}{" "}
+          <FiatEstimate
+            amountSmallestUnit={invoice.amount}
+            currency={invoice.currency}
+          />
         </dd>
         <dt>Seller</dt>
         <dd>{invoice.seller}</dd>
@@ -315,6 +346,74 @@ export default function PayInvoice() {
         )}
       </dl>
 
+      {invoice.items.length > 0 && (
+        <>
+          <h3 style={{ margin: "18px 0 8px" }}>What you&apos;re paying for</h3>
+          <div className="table-scroll">
+            <table className="ledger">
+              <caption className="visually-hidden">
+                Line items for this invoice
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Description</th>
+                  <th scope="col">Qty</th>
+                  <th scope="col">Unit price</th>
+                  <th scope="col">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoice.items.map((item, i) => (
+                  <tr key={i}>
+                    <td>{item.description}</td>
+                    <td className="num">{item.quantity}</td>
+                    <td className="num">
+                      {isUsdc
+                        ? `${formatUsdc(item.unit_price)} USDC`
+                        : `${formatNear(item.unit_price)} Ⓝ`}
+                    </td>
+                    <td className="num">
+                      {isUsdc
+                        ? `${formatUsdc((BigInt(item.quantity) * BigInt(item.unit_price)).toString())} USDC`
+                        : `${formatNear((BigInt(item.quantity) * BigInt(item.unit_price)).toString())} Ⓝ`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={3}>Subtotal</td>
+                  <td className="num">{formatInvoiceAmount({ ...invoice, amount: invoice.subtotal })}</td>
+                </tr>
+                {invoice.tax_rate_bps > 0 && (
+                  <tr>
+                    <td colSpan={3}>
+                      Tax ({(invoice.tax_rate_bps / 100).toString()}%)
+                    </td>
+                    <td className="num">{formatInvoiceAmount({ ...invoice, amount: invoice.tax_amount })}</td>
+                  </tr>
+                )}
+                <tr>
+                  <td colSpan={3}>
+                    <strong>Total due</strong>
+                  </td>
+                  <td className="num">
+                    <strong>{formatInvoiceAmount(invoice)}</strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
+      )}
+      <p className="muted" style={{ marginTop: 10 }}>
+        <FiatEstimate
+          amountSmallestUnit={invoice.amount}
+          currency={invoice.currency}
+        />{" "}
+        Estimate only — not the settlement rate.
+      </p>
+
       <hr className="rule" />
       <h3 style={{ margin: "0 0 12px" }}>Where this invoice stands</h3>
       <InvoiceTimeline invoice={invoice} />
@@ -343,7 +442,7 @@ export default function PayInvoice() {
 
       <hr className="rule" />
       <div className="row">
-        {invoice.status === "Pending" && isClient && (
+        {invoice.status === "Pending" && isClient && !isUsdc && (
           <button
             className="btn"
             disabled={busy}
@@ -351,6 +450,14 @@ export default function PayInvoice() {
           >
             {busy ? "Waiting for wallet…" : `Pay ${formatNear(invoice.amount)} Ⓝ`}
           </button>
+        )}
+        {invoice.status === "Pending" && isClient && isUsdc && (
+          <p className="muted" style={{ margin: 0 }}>
+            This is a USDC invoice — it settles via 1Click straight to
+            the seller (no escrow). Use the 1Click payment below; the
+            escrow button does not apply here because the contract
+            cannot hold USDC.
+          </p>
         )}
         {invoice.status === "Paid" && !invoice.released && isSeller && !invoice.disputed && (
           <>
@@ -390,11 +497,18 @@ export default function PayInvoice() {
         )}
         {invoice.status === "Pending" && !isClient && !isSeller && (
           <p className="muted">
-            Only the client ({invoice.client}) can pay this invoice. Connect
-            with that account to pay.
+            Only the client ({invoice.client}) can pay this invoice.
+            Connect with that account to pay.
           </p>
         )}
         <span className="spacer" />
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => downloadInvoicePdf(invoice)}
+        >
+          Download PDF
+        </button>
         <CopyButton text={shareUrl} label="Copy pay link" />
         <CopyButton
           text={reminderText}
@@ -506,19 +620,26 @@ export default function PayInvoice() {
       {invoice.status === "Pending" && isClient && (
         <>
           <hr className="rule" />
-          <h3 style={{ margin: "0 0 4px" }}>Pay from another chain — 1Click</h3>
+          <h3 style={{ margin: "0 0 4px" }}>
+            {isUsdc
+              ? "Pay via 1Click — USDC"
+              : "Pay from another chain — 1Click"}
+          </h3>
           {oneClickBlocked ? (
             <p className="sub">
               1Click / NEAR Intents is mainnet-only and has no testnet: the
               seller ({invoice.seller}) is a testnet account, which the
-              1Click API rejects. On testnet, pay in NEAR directly with the
-              button above.
+              1Click API rejects.{" "}
+              {isUsdc
+                ? "On testnet, a USDC invoice cannot be paid through escrow either — the flow is shown here with the existing external-payment confirmation: once the payment reaches the seller off-chain, the seller closes the invoice below."
+                : "On testnet, pay in NEAR directly with the button above."}
             </p>
           ) : (
             <>
               <p className="sub">
-                Pay with {sourceLabel} from your wallet on the origin chain. 1Click
-                delivers exactly {formatNear(invoice.amount)} wNEAR to the seller.
+                {isUsdc
+                  ? `This is a USDC invoice — 1Click is the way to pay it. Pay with ${sourceLabel} from your wallet on the origin chain; 1Click delivers exactly ${formatInvoiceAmount(invoice)} to the seller, straight to their account (no escrow).`
+                  : `Pay with ${sourceLabel} from your wallet on the origin chain. 1Click delivers exactly ${formatNear(invoice.amount)} wNEAR to the seller.`}
                 {quote && quote.depositAddress
                   ? ` Send ${quote.amountInFormatted} to the deposit address below — the swap starts on receipt.`
                   : ""}
@@ -576,7 +697,9 @@ export default function PayInvoice() {
                     {quote.amountInFormatted} {sourceLabel}
                   </dd>
                   <dt>Seller receives</dt>
-                  <dd>{quote.amountOutFormatted} wNEAR</dd>
+                  <dd>
+                    {quote.amountOutFormatted} {destinationLabel}
+                  </dd>
                   <dt>Time estimate</dt>
                   <dd>~{quote.timeEstimateSec} s</dd>
                   {quote.depositAddress && (
@@ -617,11 +740,9 @@ export default function PayInvoice() {
           <hr className="rule" />
           <h3 style={{ margin: "0 0 4px" }}>Confirm external payment</h3>
           <p className="sub">
-            If the client paid from another chain via 1Click and the wNEAR
-            landed in your account, close the invoice here. This records the
-            1Click deposit address as proof and marks the invoice Paid. Only
-            you (the seller) can do this. This is your own attestation —
-            nothing on-chain verifies the payment.
+            {isUsdc
+              ? "If the client paid via 1Click and the USDC landed in your account, close the invoice here. This records the 1Click deposit address as proof and marks the invoice Paid. Only you (the seller) can do this. This is your own attestation — nothing on-chain verifies the payment."
+              : "If the client paid from another chain via 1Click and the wNEAR landed in your account, close the invoice here. This records the 1Click deposit address as proof and marks the invoice Paid. Only you (the seller) can do this. This is your own attestation — nothing on-chain verifies the payment."}
           </p>
           <label htmlFor="extRef">1Click deposit address / tx reference</label>
           <input

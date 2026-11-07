@@ -157,8 +157,10 @@ No other env vars are needed — the contract account
 | `get_invoice(id)` / `list_invoices(from, limit)` | view | |
 | `get_policy(account_id)` / `get_owner()` / `get_relayer()` / `get_meta_nonce(account_id)` / `get_invoice_count()` / `get_open_invoice_count(account_id)` / `get_total_escrowed()` / `get_pending_owner()` | view | |
 
-Amounts are yoctoNEAR in the contract; the frontend converts NEAR ↔
-yocto. No token other than NEAR is accepted in phase 1.
+Amounts are yoctoNEAR in the contract for NEAR invoices; the frontend
+converts NEAR ↔ yocto. Since v2, USDC invoices are also accepted —
+denominated in micro-USDC (6 decimals) and settled via 1Click, not
+escrow.
 
 ## Project layout
 
