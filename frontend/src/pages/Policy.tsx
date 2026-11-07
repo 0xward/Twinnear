@@ -257,7 +257,7 @@ export default function PolicyPage() {
         </div>
       )}
 
-      <div className="notice" style={{ marginTop: 18 }} aria-live="polite">
+      <div className="notice-info" style={{ marginTop: 18 }} aria-live="polite">
         <strong>How this guard works.</strong> The rules are checked when
         an invoice is <em>created</em> AND again when you <em>pay</em>. An
         invoice created before you set a policy can no longer be paid once

@@ -139,7 +139,7 @@ export default function PublicInvoice() {
         </p>
       </div>
 
-      <div className="notice" aria-label="Public view">
+      <div className="notice-info" aria-label="Public view">
         <strong>Public view.</strong> No wallet needed. Everything
         below is read straight from the NEAR contract{" "}
         <a

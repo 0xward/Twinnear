@@ -34,6 +34,7 @@ import {
 import type { LineItemDraft } from "../lib/invoiceMath";
 import type { Currency, LineItem } from "../lib/types";
 import FiatEstimate from "../components/FiatEstimate";
+import AccountNameField from "../components/AccountNameField";
 
 type DueChoice = "7" | "14" | "30" | "none";
 
@@ -452,7 +453,7 @@ export default function NewInvoice() {
         </div>
       )}
       {relayerFailed && (
-        <div className="notice" aria-live="polite">
+        <div className="notice-info" aria-live="polite">
           The gasless relayer failed. You can still create this invoice
           directly (you pay your own testnet gas, a fraction of a cent).{" "}
           <button
@@ -466,20 +467,14 @@ export default function NewInvoice() {
         </div>
       )}
       <form onSubmit={handleSubmit}>
-        <label htmlFor="client">Client account</label>
-        <input
+        <AccountNameField
           id="client"
+          label="Client account"
           value={client}
-          onChange={(e) => setClient(e.target.value)}
+          onChange={setClient}
           placeholder="alice.testnet"
-          autoComplete="off"
-          list="known-clients"
+          suggestions={knownClients}
         />
-        <datalist id="known-clients">
-          {knownClients.map((c) => (
-            <option key={c} value={c} />
-          ))}
-        </datalist>
 
         <fieldset className="currency-toggle" aria-label="Invoice currency">
           <legend>Currency</legend>

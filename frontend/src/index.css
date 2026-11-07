@@ -310,6 +310,59 @@ select:focus {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* ---- live account-name check (✓ / ✗ inside the field) ---- */
+/* The wrapper holds the input and the check/cross mark, which sits
+ * inside the field on the right. Neutral while typing or checking;
+ * green ✓ once the account is found on-chain, red ✗ when the name
+ * is malformed or the account does not exist. */
+.field-wrap {
+  position: relative;
+}
+
+.field-wrap input {
+  padding-right: 42px;
+}
+
+.field-wrap input.field-ok {
+  border: 2px solid var(--accent);
+}
+
+.field-wrap input.field-bad {
+  border: 2px solid var(--danger);
+}
+
+.field-mark {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.field-mark.ok {
+  color: var(--accent);
+}
+
+.field-mark.bad {
+  color: var(--danger);
+}
+
+.field-hint {
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.field-hint.ok {
+  color: var(--accent);
+}
+
+.field-hint.bad {
+  color: var(--danger);
+}
+
 select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235c564c' stroke-width='1.5'/%3E%3C/svg%3E");
@@ -397,7 +450,41 @@ fieldset.oneclick-disabled {
   opacity: 0.6;
 }
 
+/* Success banner: thick green border + a big green check on the
+ * right, so a success can never be mistaken for an info box.
+ * Informational boxes use .notice-info below (same shape, neutral). */
 .notice {
+  position: relative;
+  background: #dcebdd;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 48px 14px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 18px;
+}
+
+.notice::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  pointer-events: none;
+}
+
+.notice strong {
+  color: var(--accent);
+}
+
+/* Neutral info banner: the old .notice look (dashed, paper tones).
+ * Used for explanations and fallbacks, never for success. */
+.notice-info {
   background: var(--paper-2);
   border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
@@ -407,18 +494,33 @@ fieldset.oneclick-disabled {
   margin-bottom: 18px;
 }
 
-.notice strong {
+.notice-info strong {
   color: var(--ink);
 }
 
 .error {
+  position: relative;
   background: #f9ecea;
-  border: 1px solid #d3a49f;
+  border: 2px solid var(--danger);
   color: var(--danger);
   border-radius: var(--radius);
-  padding: 12px 16px;
+  padding: 12px 48px 12px 16px;
   font-size: 14px;
+  font-weight: 600;
   margin-bottom: 18px;
+}
+
+.error::after {
+  content: "✗";
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  transform: translateY(-50%);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--danger);
+  pointer-events: none;
 }
 
 .kv {

@@ -296,7 +296,7 @@ export default function PayInvoice() {
       </div>
 
       {invoice.status === "Pending" && (isClient || !account) && (
-        <div className="notice" aria-label="For the client">
+        <div className="notice-info" aria-label="For the client">
           <strong>For the client.</strong>{" "}
           {isUsdc ? (
             <>

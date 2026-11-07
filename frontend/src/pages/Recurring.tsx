@@ -36,6 +36,7 @@ import type { LineItemDraft } from "../lib/invoiceMath";
 import { FREQUENCY_LABELS } from "../lib/recurring";
 import type { Currency, LineItem } from "../lib/types";
 import CurrencyBadge from "../components/CurrencyBadge";
+import AccountNameField from "../components/AccountNameField";
 import FiatEstimate from "../components/FiatEstimate";
 
 const EMPTY_ROW: LineItemDraft = {
@@ -460,13 +461,12 @@ export default function Recurring() {
             placeholder="Monthly design retainer"
             autoComplete="off"
           />
-          <label htmlFor="rt-client">Client account</label>
-          <input
+          <AccountNameField
             id="rt-client"
+            label="Client account"
             value={client}
-            onChange={(e) => setClient(e.target.value)}
+            onChange={setClient}
             placeholder="alice.testnet"
-            autoComplete="off"
           />
           <fieldset className="currency-toggle" aria-label="Retainer currency">
             <legend>Currency</legend>
