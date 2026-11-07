@@ -31,7 +31,7 @@ export default function ProvenOnNear() {
         Check it yourself.
       </p>
       <div className="proof-grid">
-        <div className="proof-card">
+        <div className="proof-card stagger-item tint-green">
           <h3>Invoice #1, paid and released</h3>
           <p>
             0.05 NEAR, paid by the client into escrow and released to the
@@ -49,7 +49,7 @@ export default function ProvenOnNear() {
             <Link to="/invoice/1">See invoice #1</Link>
           </p>
         </div>
-        <div className="proof-card">
+        <div className="proof-card stagger-item tint-teal">
           <h3>Invoice #4, created gasless</h3>
           <p>
             The seller paid no gas. A signed message, verified by the
@@ -63,7 +63,7 @@ export default function ProvenOnNear() {
             <Link to="/invoice/4">See invoice #4</Link>
           </p>
         </div>
-        <div className="proof-card">
+        <div className="proof-card stagger-item tint-lavender">
           <h3>Invoice #2, a retainer</h3>
           <p>
             1.01 NEAR recurring invoice, subtotal 1.00 NEAR plus 1% tax,

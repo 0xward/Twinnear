@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import Reveal from "../components/Reveal";
 
 function GuideLink({ to, children }: { to: string; children: string }) {
   return <Link to={to}>{children}</Link>;
@@ -34,6 +35,7 @@ export default function Docs() {
         </p>
       </div>
 
+      <Reveal>
       <div className="card">
         <h2>Find your job</h2>
         <dl className="kv">
@@ -73,7 +75,9 @@ export default function Docs() {
           </dd>
         </dl>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="first-invoice">
         <p className="filed-under">Filed under: Get paid</p>
         <h2>Send your first invoice</h2>
@@ -124,7 +128,9 @@ export default function Docs() {
           your own refund can move the money back.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="usdc">
         <p className="filed-under">Filed under: Get paid</p>
         <h2>Get paid in USDC from another chain</h2>
@@ -170,7 +176,9 @@ export default function Docs() {
           invoice is labelled Paid, external (unverified).
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="spend-guard">
         <p className="filed-under">Filed under: Protect myself</p>
         <h2>Set a spend guard</h2>
@@ -214,7 +222,9 @@ export default function Docs() {
           an emergency brake, not a bug.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="client-doesnt-pay">
         <p className="filed-under">Filed under: Protect myself</p>
         <h2>What happens if a client doesn&apos;t pay</h2>
@@ -251,7 +261,9 @@ export default function Docs() {
           Retainers are kept in your browser, not on chain.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="paying-an-invoice">
         <p className="filed-under">Filed under: Pay someone</p>
         <h2>Paying an invoice (for clients)</h2>
@@ -303,7 +315,9 @@ export default function Docs() {
           pay one only if you trust the seller.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="books">
         <p className="filed-under">Filed under: Keep my books</p>
         <h2>Keep your books</h2>
@@ -341,7 +355,9 @@ export default function Docs() {
           the amount you were paid.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card guide" id="mainnet-readiness">
         <p className="filed-under">Filed under: Get paid</p>
         <h2>Move to mainnet</h2>
@@ -391,6 +407,7 @@ export default function Docs() {
           64-character hex address) is enough for that.
         </p>
       </div>
+      </Reveal>
 
       <p className="muted">
         Something missing? Open an issue on the{" "}

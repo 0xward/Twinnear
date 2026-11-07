@@ -42,6 +42,7 @@ import PayQr from "../components/PayQr";
 import { buildReminderText, invoiceRef } from "../lib/invoiceRef";
 import { downloadInvoicePdf } from "../lib/invoicePdf";
 import { EXPLORER_URL } from "../lib/config";
+import Reveal from "../components/Reveal";
 
 export default function PayInvoice() {
   const { id } = useParams<{ id: string }>();
@@ -283,6 +284,7 @@ export default function PayInvoice() {
   const oneClickBlocked = invoice.seller.endsWith(".testnet");
 
   return (
+    <Reveal>
     <div className="card">
       <div className="page-head">
         <h2>
@@ -861,5 +863,6 @@ export default function PayInvoice() {
         </>
       )}
     </div>
+    </Reveal>
   );
 }

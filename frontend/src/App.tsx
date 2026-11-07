@@ -8,6 +8,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import WalletButton from "./components/WalletButton";
+import ScrollProgress from "./components/ScrollProgress";
 
 // Route pages are lazy-loaded so the initial bundle stays small; the
 // heavy NEAR libraries live in lib/near.ts behind dynamic import().
@@ -43,8 +44,10 @@ function ScrollToTop() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
   return (
     <div className="sheet">
+      <ScrollProgress />
       <ScrollToTop />
       <header className="masthead">
         <Link className="brand" to="/">
@@ -71,6 +74,9 @@ export default function App() {
         <NavLink to="/faq">FAQ</NavLink>
       </nav>
 
+      {/* Keyed by pathname so the page entrance plays on every
+       * navigation, not just the first load. */}
+      <div key={pathname} className="page-enter">
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -103,6 +109,7 @@ export default function App() {
           />
         </Routes>
       </Suspense>
+      </div>
 
       <footer className="footer">
         Freelancer invoicing on NEAR. Testnet only. Contract

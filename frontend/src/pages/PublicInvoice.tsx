@@ -19,6 +19,7 @@ import CurrencyBadge from "../components/CurrencyBadge";
 import FiatEstimate from "../components/FiatEstimate";
 import InvoiceTimeline from "../components/InvoiceTimeline";
 import { downloadInvoicePdf } from "../lib/invoicePdf";
+import Reveal from "../components/Reveal";
 
 /**
  * Public invoice view: anyone with the link can read an invoice, no
@@ -114,6 +115,7 @@ export default function PublicInvoice() {
   const txLinks = txLinksFor(invoice.id);
 
   return (
+    <Reveal>
     <div className="card">
       <div className="page-head">
         <h2>
@@ -353,5 +355,6 @@ export default function PublicInvoice() {
         <CopyButton text={publicUrl} label="Copy public link" />
       </div>
     </div>
+    </Reveal>
   );
 }

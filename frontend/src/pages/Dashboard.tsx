@@ -12,6 +12,7 @@ import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
 import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
+import CountUp, { countDecimals } from "../components/CountUp";
 import FiatEstimate from "../components/FiatEstimate";
 import ProvenOnNear from "../components/ProvenOnNear";
 import Reveal from "../components/Reveal";
@@ -86,6 +87,15 @@ export default function Dashboard() {
   const usdcReceivedMicro = paid
     .filter((i) => isUsdcInvoice(i) && i.released)
     .reduce((sum, i) => sum + BigInt(i.amount), 0n);
+
+  // Formatted once, so the CountUp values below stay consistent
+  // with the text they animate into.
+  const receivedStr = formatNear(receivedYocto.toString());
+  const externalStr = formatNear(externalYocto.toString());
+  const escrowStr = formatNear(escrowYocto.toString());
+  const outstandingStr = formatNear(outstandingYocto.toString());
+  const usdcOutstandingStr = formatUsdc(usdcOutstandingMicro.toString());
+  const usdcReceivedStr = formatUsdc(usdcReceivedMicro.toString());
 
   // Client directory: every client ever invoiced, not just paid ones.
   // NEAR and USDC are tracked in separate columns — never added.
@@ -170,13 +180,19 @@ export default function Dashboard() {
         </p>
       </div>
 
-      <TrustStrip />
+      <Reveal>
+        <TrustStrip />
+      </Reveal>
 
+      <Reveal>
       <div className="stat-grid">
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Received (released)</div>
           <div className="value amount">
-            {formatNear(receivedYocto.toString())}{" "}
+            <CountUp
+              value={parseFloat(receivedStr)}
+              decimals={countDecimals(receivedStr)}
+            />{" "}
             <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
@@ -187,20 +203,26 @@ export default function Dashboard() {
             />
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">External (unverified)</div>
           <div className="value amount">
-            {formatNear(externalYocto.toString())}{" "}
+            <CountUp
+              value={parseFloat(externalStr)}
+              decimals={countDecimals(externalStr)}
+            />{" "}
             <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             seller-confirmed, not on-chain
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">In escrow</div>
           <div className="value amount">
-            {formatNear(escrowYocto.toString())}{" "}
+            <CountUp
+              value={parseFloat(escrowStr)}
+              decimals={countDecimals(escrowStr)}
+            />{" "}
             <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
@@ -211,10 +233,13 @@ export default function Dashboard() {
             />
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Outstanding</div>
           <div className="value amount">
-            {formatNear(outstandingYocto.toString())}{" "}
+            <CountUp
+              value={parseFloat(outstandingStr)}
+              decimals={countDecimals(outstandingStr)}
+            />{" "}
             <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
@@ -227,14 +252,17 @@ export default function Dashboard() {
           </div>
         </div>
         {usdcInvoices.length > 0 && (
-          <div className="stat">
+          <div className="stat stagger-item">
             <div className="label">USDC (via 1Click)</div>
             <div className="value amount">
-              {formatUsdc(usdcOutstandingMicro.toString())}{" "}
+              <CountUp
+                value={parseFloat(usdcOutstandingStr)}
+                decimals={countDecimals(usdcOutstandingStr)}
+              />{" "}
               <CurrencyIcon currency="Usdc" size="sm" />
             </div>
             <div className="label" style={{ marginTop: 2 }}>
-              outstanding · {formatUsdc(usdcReceivedMicro.toString())}{" "}
+              outstanding · {usdcReceivedStr}{" "}
               <CurrencyIcon currency="Usdc" /> received ·{" "}
               <FiatEstimate
                 amountSmallestUnit={usdcOutstandingMicro.toString()}
@@ -243,15 +271,20 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Refunded</div>
-          <div className="value amount">{refunded.length}</div>
+          <div className="value amount">
+            <CountUp value={refunded.length} decimals={0} />
+          </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Cancelled</div>
-          <div className="value amount">{cancelled.length}</div>
+          <div className="value amount">
+            <CountUp value={cancelled.length} decimals={0} />
+          </div>
         </div>
       </div>
+      </Reveal>
       <p className="muted" style={{ marginTop: -8, marginBottom: 18 }}>
         Fiat amounts are rough estimates, not the rate you will be paid at.
       </p>

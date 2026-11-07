@@ -8,6 +8,7 @@ import { downloadInvoicePdf } from "../lib/invoicePdf";
 import CurrencyBadge from "../components/CurrencyBadge";
 import { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
+import Reveal from "../components/Reveal";
 import type { Invoice, InvoiceStatus } from "../lib/types";
 
 export default function Invoices() {
@@ -53,6 +54,7 @@ export default function Invoices() {
   });
 
   return (
+    <Reveal>
     <div className="card">
       <div className="page-head">
         <h2>Invoices</h2>
@@ -183,5 +185,6 @@ export default function Invoices() {
         </div>
       )}
     </div>
+    </Reveal>
   );
 }

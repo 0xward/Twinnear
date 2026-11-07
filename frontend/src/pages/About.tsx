@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { CONTRACT_ID, EXPECTED_WASM_SHA256, EXPLORER_URL } from "../lib/config";
 import { INVOICE_1_TX } from "../lib/invoiceTx";
 import CurrencyIcon from "../components/CurrencyIcon";
+import Reveal from "../components/Reveal";
 
 function txLink(hash: string, label: string) {
   return (
@@ -28,6 +29,7 @@ export default function About() {
         </p>
       </div>
 
+      <Reveal>
       <div className="card">
         <h2>What is Twinnear</h2>
         <p>
@@ -49,7 +51,9 @@ export default function About() {
           money from the testnet faucet. The code is real.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>How it works</h2>
         <p className="sub">
@@ -135,7 +139,9 @@ export default function About() {
           to the seller or back to the client, never anywhere else.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Invoice #1, a living artifact</h2>
         <p className="sub">
@@ -186,7 +192,9 @@ export default function About() {
           needed: <Link to="/invoice/1">the public view</Link>.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Live status</h2>
         <dl className="kv">
@@ -214,14 +222,18 @@ export default function About() {
           <dd>NEAR testnet only</dd>
         </dl>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Disclosure</h2>
         <p>
           There is no AI in this build. This build is payments only.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Honest limitations</h2>
         <p>
@@ -281,6 +293,7 @@ export default function About() {
           <Link to="/docs">guides</Link>.
         </p>
       </div>
+      </Reveal>
     </div>
   );
 }

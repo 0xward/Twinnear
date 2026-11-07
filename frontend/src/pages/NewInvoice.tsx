@@ -36,6 +36,7 @@ import type { Currency, LineItem } from "../lib/types";
 import FiatEstimate from "../components/FiatEstimate";
 import AccountNameField from "../components/AccountNameField";
 import CurrencyIcon from "../components/CurrencyIcon";
+import Reveal from "../components/Reveal";
 
 type DueChoice = "7" | "14" | "30" | "none";
 
@@ -411,6 +412,7 @@ export default function NewInvoice() {
     );
 
   return (
+    <Reveal>
     <div className="card">
       <h2>New invoice</h2>
       <p className="sub">
@@ -798,5 +800,6 @@ export default function NewInvoice() {
         relayer is available above when configured.
       </p>
     </div>
+    </Reveal>
   );
 }

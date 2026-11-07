@@ -12,6 +12,7 @@ import { stampClass } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
 import { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
+import Reveal from "../components/Reveal";
 import type { Invoice } from "../lib/types";
 
 /**
@@ -84,6 +85,7 @@ export default function Portal() {
   const done = invoices.filter((i) => i.status !== "Pending");
 
   return (
+    <Reveal>
     <div className="card">
       <h2>Client portal</h2>
       <p className="sub">
@@ -230,5 +232,6 @@ export default function Portal() {
         </>
       )}
     </div>
+    </Reveal>
   );
 }

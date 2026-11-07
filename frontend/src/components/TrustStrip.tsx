@@ -8,6 +8,7 @@ import {
 } from "../lib/near";
 import { CONTRACT_ID, EXPLORER_URL } from "../lib/config";
 import CurrencyIcon from "./CurrencyIcon";
+import CountUp, { countDecimals } from "./CountUp";
 
 /**
  * Trust strip: live on-chain facts, read with the view calls that
@@ -62,13 +63,17 @@ export default function TrustStrip() {
         </span>
         {count !== null && (
           <span>
-            {count} invoice{count === 1 ? "" : "s"} on chain
+            <CountUp value={count} decimals={0} /> invoice
+            {count === 1 ? "" : "s"} on chain
           </span>
         )}
         {escrowed !== null && (
           <span style={{ whiteSpace: "nowrap" }}>
-            {formatNear(escrowed)} <CurrencyIcon currency="Near" /> in
-            escrow now
+            <CountUp
+              value={parseFloat(formatNear(escrowed))}
+              decimals={countDecimals(formatNear(escrowed))}
+            />{" "}
+            <CurrencyIcon currency="Near" /> in escrow now
           </span>
         )}
       </div>

@@ -25,6 +25,7 @@
   --logo-slate: #3b4656;
   --logo-lavender-soft: #efeaf2;
   --logo-blue-soft: #e9f1f4;
+  --logo-teal-soft: #e2ecef;
   --radius: 10px;
   --shadow: 0 1px 2px rgba(28, 26, 23, 0.06), 0 8px 24px rgba(28, 26, 23, 0.06);
   --serif: Georgia, "Times New Roman", Times, serif;
@@ -606,6 +607,14 @@ fieldset.oneclick-disabled {
   box-shadow: var(--shadow);
   padding: 16px 18px;
   animation: rise 0.35s ease both;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(28, 26, 23, 0.1);
 }
 
 .stat .label {
@@ -1278,6 +1287,93 @@ table.ledger tfoot tr:last-child td {
   transform: none;
 }
 
+/* ---- staggered children ---- */
+/* When a Reveal becomes visible, its .stagger-item children fade in
+ * one after another, 70 ms apart. Opacity only: translating grid
+ * siblings would make rows uneven mid-animation and read as a layout
+ * bug. The parent Reveal still handles the scroll trigger. */
+.reveal.is-visible .stagger-item {
+  animation: stagger-in 0.5s ease both;
+}
+.reveal.is-visible .stagger-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+.reveal.is-visible .stagger-item:nth-child(2) {
+  animation-delay: 70ms;
+}
+.reveal.is-visible .stagger-item:nth-child(3) {
+  animation-delay: 140ms;
+}
+.reveal.is-visible .stagger-item:nth-child(4) {
+  animation-delay: 210ms;
+}
+.reveal.is-visible .stagger-item:nth-child(5) {
+  animation-delay: 280ms;
+}
+.reveal.is-visible .stagger-item:nth-child(6) {
+  animation-delay: 350ms;
+}
+.reveal.is-visible .stagger-item:nth-child(7) {
+  animation-delay: 420ms;
+}
+.reveal.is-visible .stagger-item:nth-child(8) {
+  animation-delay: 490ms;
+}
+.reveal.is-visible .stagger-item:nth-child(9) {
+  animation-delay: 560ms;
+}
+.reveal.is-visible .stagger-item:nth-child(10) {
+  animation-delay: 630ms;
+}
+
+@keyframes stagger-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- scroll progress bar ---- */
+/* A 3 px bar fixed to the top of the viewport, filled left to right
+ * as the page scrolls. Gradient across the logo palette. The fill is
+ * a scaleX transform only — no layout work on scroll. */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 60;
+  background: linear-gradient(
+    90deg,
+    var(--logo-teal),
+    var(--logo-blue),
+    var(--logo-lavender)
+  );
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/* ---- route-change entrance ---- */
+/* The page content fades and rises 10 px on every navigation. The
+ * wrapper is keyed by pathname in App, so it remounts per route. */
+.page-enter {
+  animation: page-in 0.4s ease both;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ---- landing page ---- */
 .landing .hero {
   padding: 36px 0 4px;
@@ -1298,6 +1394,29 @@ table.ledger tfoot tr:last-child td {
   line-height: 1.08;
   margin: 0 0 16px;
   font-weight: 700;
+}
+
+/* Hero scroll drift: as the hero scrolls out of view it drifts up
+ * 24 px and fades to 0.4 opacity, then comes back on scroll-up. CSS
+ * scroll-driven animation, guarded by @supports: browsers without
+ * it simply show a static hero. */
+@supports (animation-timeline: view()) {
+  .landing .hero {
+    animation: hero-drift linear both;
+    animation-timeline: view();
+    animation-range: exit 0% exit 100%;
+  }
+
+  @keyframes hero-drift {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0.4;
+      transform: translateY(-24px);
+    }
+  }
 }
 
 .hero .lede {
@@ -1467,6 +1586,43 @@ table.ledger tfoot tr:last-child td {
   color: var(--ink-soft);
 }
 
+/* ---- card tints ---- */
+/* Each card in a group wears a different soft wash from the logo
+ * palette, with a matching top edge, so siblings can be told apart
+ * at a glance. Pale washes only — dark ink text stays readable on
+ * every one. The number inside a step card follows its tint. */
+.tint-blue {
+  background: var(--logo-blue-soft);
+  border-top: 3px solid var(--logo-blue);
+}
+.tint-lavender {
+  background: var(--logo-lavender-soft);
+  border-top: 3px solid var(--logo-lavender);
+}
+.tint-teal {
+  background: var(--logo-teal-soft);
+  border-top: 3px solid var(--logo-teal);
+}
+.tint-cream {
+  background: var(--logo-cream);
+  border-top: 3px solid var(--line-strong);
+}
+.tint-green {
+  background: var(--accent-soft);
+  border-top: 3px solid var(--accent);
+}
+.tint-blue .step-num,
+.tint-lavender .step-num,
+.tint-cream .step-num {
+  color: var(--logo-slate);
+}
+.tint-teal .step-num {
+  color: var(--logo-teal);
+}
+.tint-green .step-num {
+  color: var(--accent);
+}
+
 .faq-mini h3 {
   font-size: 17px;
   margin: 20px 0 4px;
@@ -1546,6 +1702,22 @@ table.ledger tfoot tr:last-child td {
     transition: none;
   }
 
+  .reveal.is-visible .stagger-item {
+    animation: none;
+  }
+
+  .scroll-progress {
+    display: none;
+  }
+
+  .page-enter {
+    animation: none;
+  }
+
+  .landing .hero {
+    animation: none;
+  }
+
   .card,
   .stat {
     animation: none;
@@ -1553,6 +1725,7 @@ table.ledger tfoot tr:last-child td {
 
   .btn:hover:not(:disabled),
   .step:hover,
+  .stat:hover,
   .feature-card:hover,
   .proof-card:hover,
   .pay-pills li:hover {

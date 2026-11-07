@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import Reveal from "../components/Reveal";
 
 export default function Faq() {
   return (
@@ -13,6 +14,7 @@ export default function Faq() {
         </p>
       </div>
 
+      <Reveal>
       <div className="card">
         <h2>But what if the seller disappears?</h2>
         <p>
@@ -29,7 +31,9 @@ export default function Faq() {
           invoice only if you trust the seller.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>But what if my client never pays?</h2>
         <p>
@@ -41,7 +45,9 @@ export default function Faq() {
           Pending.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Can I get my money back?</h2>
         <p>
@@ -57,7 +63,9 @@ export default function Faq() {
           no way to pull it back through the contract.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Do I need NEAR to get paid in USDC?</h2>
         <p>
@@ -73,7 +81,9 @@ export default function Faq() {
           labelled Paid, external (unverified).
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Does the spend guard protect USDC payments?</h2>
         <p>
@@ -95,7 +105,9 @@ export default function Faq() {
           you do not trust from invoicing you at all.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>Is this real money?</h2>
         <p>
@@ -106,7 +118,9 @@ export default function Faq() {
           described, but treat every balance as a demo.
         </p>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>What does it cost?</h2>
         <p>
@@ -126,6 +140,7 @@ export default function Faq() {
           .
         </p>
       </div>
+      </Reveal>
     </div>
   );
 }

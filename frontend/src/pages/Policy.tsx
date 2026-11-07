@@ -16,6 +16,7 @@ import {
 import type { Policy, UsdcPolicy } from "../lib/types";
 import { EXPLORER_URL } from "../lib/config";
 import CurrencyIcon from "../components/CurrencyIcon";
+import Reveal from "../components/Reveal";
 
 /**
  * Spend-guard settings — the rule-based policy an account sets for
@@ -185,16 +186,19 @@ export default function PolicyPage() {
 
   if (loading) {
     return (
+      <Reveal>
       <div className="card">
         <p className="muted">Loading your policy…</p>
       </div>
+      </Reveal>
     );
   }
 
   return (
     <div>
+      <Reveal>
       <div className="stat-grid">
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Protection</div>
           <div className="value amount" style={{ fontSize: 22 }}>
             {account
@@ -211,7 +215,7 @@ export default function PolicyPage() {
               : "Connect to see your policy"}
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Max per invoice</div>
           <div className="value amount" style={{ fontSize: 22 }}>
             {current && current.max_amount !== "0" ? (
@@ -224,7 +228,7 @@ export default function PolicyPage() {
             )}
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Max total per day</div>
           <div className="value amount" style={{ fontSize: 22 }}>
             {current && current.max_total_per_day !== "0" ? (
@@ -247,7 +251,7 @@ export default function PolicyPage() {
             )}
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Max per USDC invoice</div>
           <div className="value amount" style={{ fontSize: 22 }}>
             {currentUsdc && currentUsdc.max_amount !== "0" ? (
@@ -272,7 +276,7 @@ export default function PolicyPage() {
             )}
           </div>
         </div>
-        <div className="stat">
+        <div className="stat stagger-item">
           <div className="label">Allowed sellers</div>
           <div className="value amount" style={{ fontSize: 22 }}>
             {current && current.allowed_sellers.length > 0
@@ -286,7 +290,9 @@ export default function PolicyPage() {
           </div>
         </div>
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
       <h2>Spend guard</h2>
       <p className="sub">
@@ -479,6 +485,7 @@ export default function PolicyPage() {
         limit, daily cap, USDC caps, and allowlist entirely.
       </p>
       </div>
+      </Reveal>
     </div>
   );
 }

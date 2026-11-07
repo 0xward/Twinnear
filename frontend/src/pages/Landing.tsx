@@ -54,6 +54,16 @@ const FEATURES: { title: string; body: string }[] = [
   },
 ];
 
+/** Feature-card tints, rotating through the logo palette so no two
+ * neighbouring cards wear the same wash. */
+const FEATURE_TINTS = [
+  "tint-blue",
+  "tint-lavender",
+  "tint-teal",
+  "tint-cream",
+  "tint-green",
+];
+
 export default function Landing() {
   return (
     <div className="landing">
@@ -95,7 +105,9 @@ export default function Landing() {
           </p>
           <ul className="pay-pills">
             {PAY_OPTIONS.map((option) => (
-              <li key={option}>{option}</li>
+              <li key={option} className="stagger-item">
+                {option}
+              </li>
             ))}
           </ul>
           <p className="muted">
@@ -113,7 +125,7 @@ export default function Landing() {
             through us.
           </h2>
           <div className="steps-grid">
-            <div className="step">
+            <div className="step stagger-item tint-blue">
               <div className="step-num" aria-hidden="true">
                 01
               </div>
@@ -124,7 +136,7 @@ export default function Landing() {
                 gasless: you sign a message, a relayer submits it.
               </p>
             </div>
-            <div className="step">
+            <div className="step stagger-item tint-lavender">
               <div className="step-num" aria-hidden="true">
                 02
               </div>
@@ -135,7 +147,7 @@ export default function Landing() {
                 install.
               </p>
             </div>
-            <div className="step">
+            <div className="step stagger-item tint-teal">
               <div className="step-num" aria-hidden="true">
                 03
               </div>
@@ -223,8 +235,11 @@ export default function Landing() {
             Not a payment link. A bookkeeper.
           </h2>
           <div className="feature-grid">
-            {FEATURES.map((f) => (
-              <div className="feature-card" key={f.title}>
+            {FEATURES.map((f, i) => (
+              <div
+                className={`feature-card stagger-item ${FEATURE_TINTS[i % FEATURE_TINTS.length]}`}
+                key={f.title}
+              >
                 <h3>{f.title}</h3>
                 <p>{f.body}</p>
               </div>

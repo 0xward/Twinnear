@@ -39,6 +39,7 @@ import CurrencyBadge from "../components/CurrencyBadge";
 import CurrencyIcon from "../components/CurrencyIcon";
 import AccountNameField from "../components/AccountNameField";
 import FiatEstimate from "../components/FiatEstimate";
+import Reveal from "../components/Reveal";
 
 const EMPTY_ROW: LineItemDraft = {
   description: "",
@@ -284,6 +285,7 @@ export default function Recurring() {
 
   return (
     <div>
+      <Reveal>
       <div className="card">
         <h2>Retainers</h2>
         <p className="sub">
@@ -446,7 +448,9 @@ export default function Recurring() {
           </div>
         )}
       </div>
+      </Reveal>
 
+      <Reveal>
       <div className="card">
         <h2>New retainer</h2>
         <p className="sub">
@@ -632,6 +636,7 @@ export default function Recurring() {
           </div>
         </form>
       </div>
+      </Reveal>
     </div>
   );
 }
