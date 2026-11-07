@@ -1,6 +1,6 @@
 /** Twinnear configuration — NEAR testnet. */
 export const NETWORK_ID = "testnet";
-export const RPC_URL = "https://rpc.testnet.near.org";
+export const RPC_URL = "https://rpc.testnet.fastnear.com";
 export const EXPLORER_URL = "https://testnet.nearblocks.io";
 /** Contract account. Live on testnet since 2026-11-07 (v1); the v2
  *  upgrade is deployed separately — see DEPLOY.md "Redeploy +

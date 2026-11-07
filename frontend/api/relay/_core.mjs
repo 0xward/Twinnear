@@ -22,7 +22,7 @@
  *   RELAYER_ACCOUNT_ID        e.g. relayer.twinnear.testnet (must hold testnet NEAR)
  *   RELAYER_PRIVATE_KEY       ed25519:... private key of that account
  *   CONTRACT_ID               default twinnear.testnet
- *   RPC_URL                   default https://rpc.testnet.near.org
+ *   RPC_URL                   default https://rpc.testnet.fastnear.com
  *   RELAYER_ALLOWED_SELLERS   optional comma list, e.g. "alice.testnet,bob.testnet"
  *                             - when set, ONLY these sellers may relay (H-04)
  *   RELAYER_API_KEY           optional shared secret; when set, clients must
@@ -71,7 +71,7 @@ import { connect, keyStores, utils } from "near-api-js";
 const RELAYER_ACCOUNT_ID = process.env.RELAYER_ACCOUNT_ID;
 const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY;
 const CONTRACT_ID = process.env.CONTRACT_ID ?? "twinnear.testnet";
-const RPC_URL = process.env.RPC_URL ?? "https://rpc.testnet.near.org";
+const RPC_URL = process.env.RPC_URL ?? "https://rpc.testnet.fastnear.com";
 const ALLOWED_SELLERS = (process.env.RELAYER_ALLOWED_SELLERS ?? "")
   .split(",")
   .map((s) => s.trim())
