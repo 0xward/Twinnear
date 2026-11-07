@@ -12,13 +12,20 @@ import type { Currency, Invoice } from "../lib/types";
  * USDC mark). Rendered at ~1em so it scales with the surrounding
  * text and sits on the baseline like the old Ⓝ glyph did.
  *
+ * `size="sm"` renders a fixed compact 15px mark — the size the
+ * Ledger's Recent-invoices table gets from its small text. Use it
+ * wherever the surrounding type is large (stat-card values), where
+ * a 1em mark would dominate the number instead of annotating it.
+ *
  * The PDF deliberately does NOT use this (invoicePdf.ts avoids the
  * Ⓝ glyph for font reasons and writes the currency as text).
  */
 export default function CurrencyIcon({
   currency,
+  size = "md",
 }: {
   currency: Currency | string;
+  size?: "sm" | "md";
 }) {
   const isUsdc = currency === "Usdc";
   return (
@@ -26,7 +33,9 @@ export default function CurrencyIcon({
       src={isUsdc ? usdcSvg : nearSvg}
       alt={isUsdc ? "USDC" : "NEAR"}
       title={isUsdc ? "USDC" : "NEAR"}
-      className="currency-icon"
+      className={
+        size === "sm" ? "currency-icon currency-icon--sm" : "currency-icon"
+      }
     />
   );
 }

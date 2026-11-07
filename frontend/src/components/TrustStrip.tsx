@@ -62,17 +62,22 @@ export default function TrustStrip() {
         </span>
       )}
       {escrowed !== null && (
-        <span>
+        <span style={{ whiteSpace: "nowrap" }}>
           {formatNear(escrowed)} <CurrencyIcon currency="Near" /> in escrow
           now
         </span>
       )}
       <span>No fees. No signup. No custody.</span>
-      <span>
-        <Link to="/invoice/1">See invoice #1, paid and released</Link>
-      </span>
-      <span>
-        <Link to="/about">What is Twinnear?</Link>
+      {/* Links grouped and pushed right: facts stay left, the two
+       * links travel as one unit (they no longer dangle one per
+       * line when the strip wraps on a phone). */}
+      <span className="trust-links">
+        <span>
+          <Link to="/invoice/1">See invoice #1, paid and released</Link>
+        </span>
+        <span>
+          <Link to="/about">What is Twinnear?</Link>
+        </span>
       </span>
     </div>
   );

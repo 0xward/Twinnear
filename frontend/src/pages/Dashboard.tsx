@@ -167,7 +167,7 @@ export default function Dashboard() {
           <div className="label">Received (released)</div>
           <div className="value amount">
             {formatNear(receivedYocto.toString())}{" "}
-            <CurrencyIcon currency="Near" />
+            <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             escrow released to you ·{" "}
@@ -181,7 +181,7 @@ export default function Dashboard() {
           <div className="label">External (unverified)</div>
           <div className="value amount">
             {formatNear(externalYocto.toString())}{" "}
-            <CurrencyIcon currency="Near" />
+            <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             1Click payments confirmed by the seller, not checked on-chain
@@ -191,7 +191,7 @@ export default function Dashboard() {
           <div className="label">In escrow</div>
           <div className="value amount">
             {formatNear(escrowYocto.toString())}{" "}
-            <CurrencyIcon currency="Near" />
+            <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             <FiatEstimate
@@ -204,7 +204,7 @@ export default function Dashboard() {
           <div className="label">Outstanding</div>
           <div className="value amount">
             {formatNear(outstandingYocto.toString())}{" "}
-            <CurrencyIcon currency="Near" />
+            <CurrencyIcon currency="Near" size="sm" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             {pendingNear.length} unpaid NEAR invoice
@@ -220,7 +220,7 @@ export default function Dashboard() {
             <div className="label">USDC (via 1Click)</div>
             <div className="value amount">
               {formatUsdc(usdcOutstandingMicro.toString())}{" "}
-              <CurrencyIcon currency="Usdc" />
+              <CurrencyIcon currency="Usdc" size="sm" />
             </div>
             <div className="label" style={{ marginTop: 2 }}>
               outstanding · {formatUsdc(usdcReceivedMicro.toString())}{" "}

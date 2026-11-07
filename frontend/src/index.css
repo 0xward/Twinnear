@@ -118,15 +118,19 @@ code,
   flex: none;
 }
 
+/* The header motto: serif italic, not the sans uppercase label the
+ * body text uses — a slogan should read like a bookplate inscription,
+ * distinct from labels and body copy, while staying in the paper
+ * idiom. */
 .brand small {
   display: block;
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--ink-soft);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-top: 2px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+  margin-top: 3px;
 }
 
 .nav {
@@ -154,6 +158,12 @@ code,
   background: var(--accent-soft);
   color: var(--accent);
   text-decoration: none;
+}
+
+/* The current page reads as a destination, not just a hover: same
+ * soft fill, but semibold so it holds its weight among the pills. */
+.nav a.active {
+  font-weight: 600;
 }
 
 /* ---- paper cards ---- */
@@ -373,6 +383,16 @@ select:focus {
   display: inline-block;
 }
 
+/* Compact mark (15px, fixed): the size the Ledger's invoice table
+ * gets from its small text. Used where the surrounding type is large
+ * — stat-card values — so the mark annotates the number instead of
+ * competing with it. */
+.currency-icon--sm {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+}
+
 select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235c564c' stroke-width='1.5'/%3E%3C/svg%3E");
@@ -578,7 +598,7 @@ fieldset.oneclick-disabled {
 
 .stat .value {
   font-family: var(--serif);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   margin-top: 4px;
 }
@@ -615,7 +635,8 @@ fieldset.oneclick-disabled {
 .page-head h1,
 .page-head h2 {
   margin: 0 0 4px;
-  font-size: 26px;
+  font-size: 30px;
+  font-weight: 700;
 }
 
 .page-head p {
@@ -1022,16 +1043,13 @@ table.ledger tfoot tr:last-child td {
     font-size: 26px;
   }
 
+  /* Wrap instead of horizontal scroll: the scroll hid tabs mid-word
+   * ("Clie…") with no affordance it could scroll, so the bar looked
+   * broken/overflowing on a phone. Wrapping shows every tab whole;
+   * it costs one more line instead of a cut-off one. */
   .nav {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    flex-wrap: wrap;
     margin-bottom: 20px;
-  }
-
-  .nav::-webkit-scrollbar {
-    display: none;
   }
 
   .nav a {
@@ -1111,6 +1129,16 @@ table.ledger tfoot tr:last-child td {
 
 .trust-strip .stamp {
   flex: none;
+}
+
+/* The strip's two links travel as one group, pushed to the right on
+ * wide screens; on a phone they wrap below as a unit instead of
+ * dangling one per line. */
+.trust-links {
+  margin-left: auto;
+  display: flex;
+  gap: 6px 16px;
+  flex-wrap: wrap;
 }
 
 /* ---- guides / docs ---- */
