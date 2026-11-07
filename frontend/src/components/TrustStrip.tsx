@@ -7,6 +7,7 @@ import {
   getVersion,
 } from "../lib/near";
 import { CONTRACT_ID, EXPLORER_URL } from "../lib/config";
+import CurrencyIcon from "./CurrencyIcon";
 
 /**
  * Trust strip: live on-chain facts, read with the view calls that
@@ -61,7 +62,10 @@ export default function TrustStrip() {
         </span>
       )}
       {escrowed !== null && (
-        <span>{formatNear(escrowed)} Ⓝ in escrow now</span>
+        <span>
+          {formatNear(escrowed)} <CurrencyIcon currency="Near" /> in escrow
+          now
+        </span>
       )}
       <span>No fees. No signup. No custody.</span>
       <span>

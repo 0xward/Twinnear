@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { formatDate, formatInvoiceAmount, friendlyError, listAllInvoices } from "../lib/near";
+import { formatDate, friendlyError, listAllInvoices } from "../lib/near";
 import { exportInvoicesCsv } from "../lib/csv";
 import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import { downloadInvoicePdf } from "../lib/invoicePdf";
 import CurrencyBadge from "../components/CurrencyBadge";
+import { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
 import type { Invoice, InvoiceStatus } from "../lib/types";
 
@@ -149,7 +150,7 @@ export default function Invoices() {
                   <td>{inv.description}</td>
                   <td className="num">
                     <CurrencyBadge currency={inv.currency} />{" "}
-                    {formatInvoiceAmount(inv)}
+                    <InvoiceAmount invoice={inv} />
                     <br />
                     <FiatEstimate
                       amountSmallestUnit={inv.amount}

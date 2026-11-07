@@ -36,6 +36,7 @@ import type { LineItemDraft } from "../lib/invoiceMath";
 import { FREQUENCY_LABELS } from "../lib/recurring";
 import type { Currency, LineItem } from "../lib/types";
 import CurrencyBadge from "../components/CurrencyBadge";
+import CurrencyIcon from "../components/CurrencyIcon";
 import AccountNameField from "../components/AccountNameField";
 import FiatEstimate from "../components/FiatEstimate";
 
@@ -387,8 +388,9 @@ export default function Recurring() {
                     <td className="num">
                       <CurrencyBadge currency={t.currency} />{" "}
                       {t.currency === "Usdc"
-                        ? `${formatUsdc(t.totalSmallestUnit)} USDC`
-                        : `${formatNear(t.totalSmallestUnit)} Ⓝ`}{" "}
+                        ? formatUsdc(t.totalSmallestUnit)
+                        : formatNear(t.totalSmallestUnit)}{" "}
+                      <CurrencyIcon currency={t.currency} />{" "}
                       <FiatEstimate
                         amountSmallestUnit={t.totalSmallestUnit}
                         currency={t.currency}
@@ -587,17 +589,17 @@ export default function Recurring() {
               <dt>Subtotal</dt>
               <dd>
                 {formatUnit(totals.subtotal)}{" "}
-                {currency === "Usdc" ? "USDC" : "Ⓝ"}
+                <CurrencyIcon currency={currency} />
               </dd>
               <dt>Tax</dt>
               <dd>
                 {formatUnit(totals.taxAmount)}{" "}
-                {currency === "Usdc" ? "USDC" : "Ⓝ"}
+                <CurrencyIcon currency={currency} />
               </dd>
               <dt>Total / period</dt>
               <dd>
                 {formatUnit(totals.total)}{" "}
-                {currency === "Usdc" ? "USDC" : "Ⓝ"}{" "}
+                <CurrencyIcon currency={currency} />{" "}
                 <FiatEstimate
                   amountSmallestUnit={totals.total}
                   currency={currency}

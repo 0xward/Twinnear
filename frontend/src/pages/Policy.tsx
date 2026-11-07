@@ -12,6 +12,7 @@ import {
 } from "../lib/near";
 import type { Policy } from "../lib/types";
 import { EXPLORER_URL } from "../lib/config";
+import CurrencyIcon from "../components/CurrencyIcon";
 
 /**
  * Spend-guard settings — the rule-based policy an account sets for
@@ -166,22 +167,37 @@ export default function PolicyPage() {
         <div className="stat">
           <div className="label">Max per invoice</div>
           <div className="value amount" style={{ fontSize: 22 }}>
-            {current && current.max_amount !== "0"
-              ? `${formatNear(current.max_amount)} Ⓝ`
-              : "No limit"}
+            {current && current.max_amount !== "0" ? (
+              <>
+                {formatNear(current.max_amount)}{" "}
+                <CurrencyIcon currency="Near" />
+              </>
+            ) : (
+              "No limit"
+            )}
           </div>
         </div>
         <div className="stat">
           <div className="label">Max total per day</div>
           <div className="value amount" style={{ fontSize: 22 }}>
-            {current && current.max_total_per_day !== "0"
-              ? `${formatNear(current.max_total_per_day)} Ⓝ`
-              : "No limit"}
+            {current && current.max_total_per_day !== "0" ? (
+              <>
+                {formatNear(current.max_total_per_day)}{" "}
+                <CurrencyIcon currency="Near" />
+              </>
+            ) : (
+              "No limit"
+            )}
           </div>
           <div className="label" style={{ marginTop: 2 }}>
-            {current && current.max_total_per_day !== "0"
-              ? `Spent today: ${formatNear(current.daily_spent)} Ⓝ`
-              : "no daily cap set"}
+            {current && current.max_total_per_day !== "0" ? (
+              <>
+                Spent today: {formatNear(current.daily_spent)}{" "}
+                <CurrencyIcon currency="Near" />
+              </>
+            ) : (
+              "no daily cap set"
+            )}
           </div>
         </div>
         <div className="stat">
@@ -212,15 +228,27 @@ export default function PolicyPage() {
           <dd>{account}</dd>
           <dt>Current limit</dt>
           <dd>
-            {current && current.max_amount !== "0"
-              ? `${formatNear(current.max_amount)} Ⓝ per invoice`
-              : "No limit"}
+            {current && current.max_amount !== "0" ? (
+              <>
+                {formatNear(current.max_amount)}{" "}
+                <CurrencyIcon currency="Near" /> per invoice
+              </>
+            ) : (
+              "No limit"
+            )}
           </dd>
           <dt>Daily cap</dt>
           <dd>
-            {current && current.max_total_per_day !== "0"
-              ? `${formatNear(current.max_total_per_day)} Ⓝ per day (${formatNear(current.daily_spent)} Ⓝ spent today)`
-              : "No daily cap"}
+            {current && current.max_total_per_day !== "0" ? (
+              <>
+                {formatNear(current.max_total_per_day)}{" "}
+                <CurrencyIcon currency="Near" /> per day (
+                {formatNear(current.daily_spent)}{" "}
+                <CurrencyIcon currency="Near" /> spent today)
+              </>
+            ) : (
+              "No daily cap"
+            )}
           </dd>
           <dt>Allowlist</dt>
           <dd>

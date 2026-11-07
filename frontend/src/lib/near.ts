@@ -285,20 +285,23 @@ export function isUsdcInvoice(inv: Invoice): boolean {
   return (inv.currency ?? "Near") === "Usdc";
 }
 
-/** Display symbol for an invoice's currency. */
+/** Display symbol for an invoice's currency (plain text, for
+ *  share text / CSV — on-screen amounts use <CurrencyIcon/>). */
 export function currencySymbol(currency: string): string {
-  return currency === "Usdc" ? "USDC" : "Ⓝ";
+  return currency === "Usdc" ? "USDC" : "NEAR";
 }
 
 /**
- * Format an invoice total in its own currency, e.g. "1.5 Ⓝ" or
- * "12.34 USDC". Amounts are always shown in their native unit —
- * never convert USDC micro-units as if they were yoctoNEAR.
+ * Format an invoice total in its own currency, e.g. "1.5 NEAR" or
+ * "12.34 USDC". Plain text only, for share text and other
+ * non-JSX contexts — on-screen amounts use <InvoiceAmount/> so the
+ * official logo is shown. Amounts are always shown in their native
+ * unit — never convert USDC micro-units as if they were yoctoNEAR.
  */
 export function formatInvoiceAmount(inv: Invoice): string {
   return isUsdcInvoice(inv)
     ? `${formatUsdc(inv.amount)} USDC`
-    : `${formatNear(inv.amount)} Ⓝ`;
+    : `${formatNear(inv.amount)} NEAR`;
 }
 
 /** Contract schema version (v2 method; v1 has no such method). */

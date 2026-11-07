@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { CONTRACT_ID, EXPECTED_WASM_SHA256, EXPLORER_URL } from "../lib/config";
 import { INVOICE_1_TX } from "../lib/invoiceTx";
+import CurrencyIcon from "../components/CurrencyIcon";
 
 function txLink(hash: string, label: string) {
   return (
@@ -104,21 +105,26 @@ export default function About() {
                 <td>1. Client pays</td>
                 <td>0xward.testnet (client)</td>
                 <td>Contract escrow</td>
-                <td className="num">0.05 Ⓝ</td>
+                <td className="num">
+                  0.05 <CurrencyIcon currency="Near" />
+                </td>
               </tr>
               <tr>
                 <td>2. Held</td>
                 <td>Contract escrow</td>
                 <td>Contract escrow</td>
                 <td className="num">
-                  0.05 Ⓝ, waiting. The contract cannot spend it.
+                  0.05 <CurrencyIcon currency="Near" />, waiting. The
+                  contract cannot spend it.
                 </td>
               </tr>
               <tr>
                 <td>3. Seller releases</td>
                 <td>Contract escrow</td>
                 <td>twinnear.testnet (seller)</td>
-                <td className="num">0.05 Ⓝ</td>
+                <td className="num">
+                  0.05 <CurrencyIcon currency="Near" />
+                </td>
               </tr>
             </tbody>
           </table>

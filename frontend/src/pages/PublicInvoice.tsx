@@ -2,7 +2,6 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   formatDate,
-  formatInvoiceAmount,
   formatNear,
   formatUsdc,
   friendlyError,
@@ -12,6 +11,7 @@ import {
 import type { Invoice } from "../lib/types";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import { invoiceRef } from "../lib/invoiceRef";
+import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
 import { txLinksFor } from "../lib/invoiceTx";
 import { CONTRACT_ID, EXPLORER_URL } from "../lib/config";
 import CopyButton from "../components/CopyButton";
@@ -156,7 +156,7 @@ export default function PublicInvoice() {
       <dl className="kv">
         <dt>Amount due</dt>
         <dd className="amount" style={{ fontSize: 26 }}>
-          {formatInvoiceAmount(invoice)}{" "}
+          <InvoiceAmount invoice={invoice} />{" "}
           <FiatEstimate
             amountSmallestUnit={invoice.amount}
             currency={invoice.currency}
@@ -221,13 +221,23 @@ export default function PublicInvoice() {
                     <td className="num">{item.quantity}</td>
                     <td className="num">
                       {isUsdc
-                        ? `${formatUsdc(item.unit_price)} USDC`
-                        : `${formatNear(item.unit_price)} Ⓝ`}
+                        ? formatUsdc(item.unit_price)
+                        : formatNear(item.unit_price)}{" "}
+                      <CurrencyIcon currency={invoice.currency ?? "Near"} />
                     </td>
                     <td className="num">
                       {isUsdc
-                        ? `${formatUsdc((BigInt(item.quantity) * BigInt(item.unit_price)).toString())} USDC`
-                        : `${formatNear((BigInt(item.quantity) * BigInt(item.unit_price)).toString())} Ⓝ`}
+                        ? formatUsdc(
+                            (
+                              BigInt(item.quantity) * BigInt(item.unit_price)
+                            ).toString(),
+                          )
+                        : formatNear(
+                            (
+                              BigInt(item.quantity) * BigInt(item.unit_price)
+                            ).toString(),
+                          )}{" "}
+                      <CurrencyIcon currency={invoice.currency ?? "Near"} />
                     </td>
                   </tr>
                 ))}
@@ -236,10 +246,9 @@ export default function PublicInvoice() {
                 <tr>
                   <td colSpan={3}>Subtotal</td>
                   <td className="num">
-                    {formatInvoiceAmount({
-                      ...invoice,
-                      amount: invoice.subtotal,
-                    })}
+                    <InvoiceAmount
+                      invoice={{ ...invoice, amount: invoice.subtotal }}
+                    />
                   </td>
                 </tr>
                 {invoice.tax_rate_bps > 0 && (
@@ -248,10 +257,9 @@ export default function PublicInvoice() {
                       Tax ({(invoice.tax_rate_bps / 100).toString()}%)
                     </td>
                     <td className="num">
-                      {formatInvoiceAmount({
-                        ...invoice,
-                        amount: invoice.tax_amount,
-                      })}
+                      <InvoiceAmount
+                        invoice={{ ...invoice, amount: invoice.tax_amount }}
+                      />
                     </td>
                   </tr>
                 )}
@@ -260,7 +268,9 @@ export default function PublicInvoice() {
                     <strong>Total due</strong>
                   </td>
                   <td className="num">
-                    <strong>{formatInvoiceAmount(invoice)}</strong>
+                    <strong>
+                      <InvoiceAmount invoice={invoice} />
+                    </strong>
                   </td>
                 </tr>
               </tfoot>

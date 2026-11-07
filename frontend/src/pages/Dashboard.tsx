@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   formatDate,
-  formatInvoiceAmount,
   formatNear,
   formatUsdc,
   isUsdcInvoice,
@@ -12,6 +11,7 @@ import { exportInvoicesCsv } from "../lib/csv";
 import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
+import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
 import TrustStrip from "../components/TrustStrip";
 import type { Invoice } from "../lib/types";
@@ -119,12 +119,30 @@ export default function Dashboard() {
         : -1,
   );
 
-  /** "1.5 Ⓝ" plus " · 12.00 USDC" when the client also has USDC. */
-  function clientCell(nearYocto: bigint, usdcMicro: bigint): string {
-    const parts: string[] = [];
-    if (nearYocto > 0n) parts.push(`${formatNear(nearYocto.toString())} Ⓝ`);
-    if (usdcMicro > 0n) parts.push(`${formatUsdc(usdcMicro.toString())} USDC`);
-    return parts.length > 0 ? parts.join(" · ") : "-";
+  /** "1.5 [NEAR]" plus " · 12.00 [USDC]" when the client also has USDC. */
+  function clientCell(nearYocto: bigint, usdcMicro: bigint) {
+    const near =
+      nearYocto > 0n ? (
+        <span key="near">
+          {formatNear(nearYocto.toString())}{" "}
+          <CurrencyIcon currency="Near" />
+        </span>
+      ) : null;
+    const usdc =
+      usdcMicro > 0n ? (
+        <span key="usdc">
+          {formatUsdc(usdcMicro.toString())}{" "}
+          <CurrencyIcon currency="Usdc" />
+        </span>
+      ) : null;
+    if (!near && !usdc) return "-";
+    return (
+      <>
+        {near}
+        {near && usdc ? " · " : null}
+        {usdc}
+      </>
+    );
   }
 
   const recent = [...invoices]
@@ -148,7 +166,8 @@ export default function Dashboard() {
         <div className="stat">
           <div className="label">Received (released)</div>
           <div className="value amount">
-            {formatNear(receivedYocto.toString())} Ⓝ
+            {formatNear(receivedYocto.toString())}{" "}
+            <CurrencyIcon currency="Near" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             escrow released to you ·{" "}
@@ -161,7 +180,8 @@ export default function Dashboard() {
         <div className="stat">
           <div className="label">External (unverified)</div>
           <div className="value amount">
-            {formatNear(externalYocto.toString())} Ⓝ
+            {formatNear(externalYocto.toString())}{" "}
+            <CurrencyIcon currency="Near" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             1Click payments confirmed by the seller, not checked on-chain
@@ -170,7 +190,8 @@ export default function Dashboard() {
         <div className="stat">
           <div className="label">In escrow</div>
           <div className="value amount">
-            {formatNear(escrowYocto.toString())} Ⓝ
+            {formatNear(escrowYocto.toString())}{" "}
+            <CurrencyIcon currency="Near" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             <FiatEstimate
@@ -182,7 +203,8 @@ export default function Dashboard() {
         <div className="stat">
           <div className="label">Outstanding</div>
           <div className="value amount">
-            {formatNear(outstandingYocto.toString())} Ⓝ
+            {formatNear(outstandingYocto.toString())}{" "}
+            <CurrencyIcon currency="Near" />
           </div>
           <div className="label" style={{ marginTop: 2 }}>
             {pendingNear.length} unpaid NEAR invoice
@@ -197,11 +219,12 @@ export default function Dashboard() {
           <div className="stat">
             <div className="label">USDC (via 1Click)</div>
             <div className="value amount">
-              {formatUsdc(usdcOutstandingMicro.toString())} USDC
+              {formatUsdc(usdcOutstandingMicro.toString())}{" "}
+              <CurrencyIcon currency="Usdc" />
             </div>
             <div className="label" style={{ marginTop: 2 }}>
-              outstanding · {formatUsdc(usdcReceivedMicro.toString())} USDC
-              received ·{" "}
+              outstanding · {formatUsdc(usdcReceivedMicro.toString())}{" "}
+              <CurrencyIcon currency="Usdc" /> received ·{" "}
               <FiatEstimate
                 amountSmallestUnit={usdcOutstandingMicro.toString()}
                 currency="Usdc"
@@ -320,7 +343,7 @@ export default function Dashboard() {
                     <td>{inv.client}</td>
                     <td className="num">
                       <CurrencyBadge currency={inv.currency} />{" "}
-                      {formatInvoiceAmount(inv)}
+                      <InvoiceAmount invoice={inv} />
                     </td>
                     <td>
                       <span className={stampClass(inv)}>

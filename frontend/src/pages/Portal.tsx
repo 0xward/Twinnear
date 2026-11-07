@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   formatDate,
-  formatInvoiceAmount,
   friendlyError,
   getSignedInAccount,
   listAllInvoices,
@@ -11,6 +10,7 @@ import {
 import { invoiceRef } from "../lib/invoiceRef";
 import { stampClass } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
+import { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
 import type { Invoice } from "../lib/types";
 
@@ -151,7 +151,7 @@ export default function Portal() {
                         <td>{inv.description || "-"}</td>
                         <td className="num">
                           <CurrencyBadge currency={inv.currency} />{" "}
-                          {formatInvoiceAmount(inv)}
+                          <InvoiceAmount invoice={inv} />
                           <br />
                           <FiatEstimate
                             amountSmallestUnit={inv.amount}
@@ -204,7 +204,9 @@ export default function Portal() {
                         </td>
                         <td>{inv.seller}</td>
                         <td>{inv.description || "-"}</td>
-                        <td className="num">{formatInvoiceAmount(inv)}</td>
+                        <td className="num">
+                          <InvoiceAmount invoice={inv} />
+                        </td>
                         <td>
                           <span className={stampClass(inv)}>
                             {clientStatusLabel(inv)}

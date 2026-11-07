@@ -33,6 +33,7 @@ import type { Invoice } from "../lib/types";
 import { stampClass, statusLabel } from "../lib/invoiceStatus";
 import CopyButton from "../components/CopyButton";
 import CurrencyBadge from "../components/CurrencyBadge";
+import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
 import InvoiceTimeline from "../components/InvoiceTimeline";
 import PayQr from "../components/PayQr";
@@ -325,7 +326,7 @@ export default function PayInvoice() {
       <dl className="kv">
         <dt>Amount due</dt>
         <dd className="amount" style={{ fontSize: 26 }}>
-          {formatInvoiceAmount(invoice)}{" "}
+          <InvoiceAmount invoice={invoice} />{" "}
           <FiatEstimate
             amountSmallestUnit={invoice.amount}
             currency={invoice.currency}
@@ -396,13 +397,23 @@ export default function PayInvoice() {
                     <td className="num">{item.quantity}</td>
                     <td className="num">
                       {isUsdc
-                        ? `${formatUsdc(item.unit_price)} USDC`
-                        : `${formatNear(item.unit_price)} Ⓝ`}
+                        ? formatUsdc(item.unit_price)
+                        : formatNear(item.unit_price)}{" "}
+                      <CurrencyIcon currency={invoice.currency ?? "Near"} />
                     </td>
                     <td className="num">
                       {isUsdc
-                        ? `${formatUsdc((BigInt(item.quantity) * BigInt(item.unit_price)).toString())} USDC`
-                        : `${formatNear((BigInt(item.quantity) * BigInt(item.unit_price)).toString())} Ⓝ`}
+                        ? formatUsdc(
+                            (
+                              BigInt(item.quantity) * BigInt(item.unit_price)
+                            ).toString(),
+                          )
+                        : formatNear(
+                            (
+                              BigInt(item.quantity) * BigInt(item.unit_price)
+                            ).toString(),
+                          )}{" "}
+                      <CurrencyIcon currency={invoice.currency ?? "Near"} />
                     </td>
                   </tr>
                 ))}
@@ -410,14 +421,22 @@ export default function PayInvoice() {
               <tfoot>
                 <tr>
                   <td colSpan={3}>Subtotal</td>
-                  <td className="num">{formatInvoiceAmount({ ...invoice, amount: invoice.subtotal })}</td>
+                  <td className="num">
+                    <InvoiceAmount
+                      invoice={{ ...invoice, amount: invoice.subtotal }}
+                    />
+                  </td>
                 </tr>
                 {invoice.tax_rate_bps > 0 && (
                   <tr>
                     <td colSpan={3}>
                       Tax ({(invoice.tax_rate_bps / 100).toString()}%)
                     </td>
-                    <td className="num">{formatInvoiceAmount({ ...invoice, amount: invoice.tax_amount })}</td>
+                    <td className="num">
+                      <InvoiceAmount
+                        invoice={{ ...invoice, amount: invoice.tax_amount }}
+                      />
+                    </td>
                   </tr>
                 )}
                 <tr>
@@ -425,7 +444,9 @@ export default function PayInvoice() {
                     <strong>Total due</strong>
                   </td>
                   <td className="num">
-                    <strong>{formatInvoiceAmount(invoice)}</strong>
+                    <strong>
+                      <InvoiceAmount invoice={invoice} />
+                    </strong>
                   </td>
                 </tr>
               </tfoot>
@@ -475,7 +496,14 @@ export default function PayInvoice() {
             disabled={busy}
             onClick={handlePay}
           >
-            {busy ? "Waiting for wallet…" : `Pay ${formatNear(invoice.amount)} Ⓝ`}
+            {busy ? (
+              "Waiting for wallet…"
+            ) : (
+              <>
+                Pay {formatNear(invoice.amount)}{" "}
+                <CurrencyIcon currency="Near" />
+              </>
+            )}
           </button>
         )}
         {invoice.status === "Pending" && isClient && isUsdc && (
@@ -664,9 +692,22 @@ export default function PayInvoice() {
           ) : (
             <>
               <p className="sub">
-                {isUsdc
-                  ? `This is a USDC invoice. 1Click is the way to pay it. Pay with ${sourceLabel} from your wallet on the origin chain; 1Click delivers exactly ${formatInvoiceAmount(invoice)} to the seller, straight to their account (no escrow).`
-                  : `Pay with ${sourceLabel} from your wallet on the origin chain. 1Click delivers exactly ${formatNear(invoice.amount)} wNEAR to the seller.`}
+                {isUsdc ? (
+                  <>
+                    This is a USDC invoice. 1Click is the way to pay it. Pay
+                    with {sourceLabel} from your wallet on the origin chain;
+                    1Click delivers exactly{" "}
+                    <InvoiceAmount invoice={invoice} /> to the seller,
+                    straight to their account (no escrow).
+                  </>
+                ) : (
+                  <>
+                    Pay with {sourceLabel} from your wallet on the origin
+                    chain. 1Click delivers exactly{" "}
+                    {formatNear(invoice.amount)}{" "}
+                    <CurrencyIcon currency="Near" /> to the seller.
+                  </>
+                )}
                 {quote && quote.depositAddress
                   ? ` Send ${quote.amountInFormatted} to the deposit address below. The swap starts on receipt.`
                   : ""}

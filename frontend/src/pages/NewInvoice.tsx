@@ -35,6 +35,7 @@ import type { LineItemDraft } from "../lib/invoiceMath";
 import type { Currency, LineItem } from "../lib/types";
 import FiatEstimate from "../components/FiatEstimate";
 import AccountNameField from "../components/AccountNameField";
+import CurrencyIcon from "../components/CurrencyIcon";
 
 type DueChoice = "7" | "14" | "30" | "none";
 
@@ -398,9 +399,16 @@ export default function NewInvoice() {
     currency === "Usdc" ? "Amount (USDC)" : "Amount (NEAR)";
   const unitLabel = currency === "Usdc" ? "USDC" : "NEAR";
   const previewTotal =
-    computedTotalSmallest !== null
-      ? `${formatUnit(computedTotalSmallest)} ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`
-      : `- ${unitLabel === "NEAR" ? "Ⓝ" : "USDC"}`;
+    computedTotalSmallest !== null ? (
+      <>
+        {formatUnit(computedTotalSmallest)}{" "}
+        <CurrencyIcon currency={currency} />
+      </>
+    ) : (
+      <>
+        - <CurrencyIcon currency={currency} />
+      </>
+    );
 
   return (
     <div className="card">
@@ -741,15 +749,18 @@ export default function NewInvoice() {
             <dl className="kv" style={{ marginTop: 8 }}>
               <dt>Subtotal</dt>
               <dd>
-                {formatUnit(itemTotals.subtotal)} {unitLabel === "NEAR" ? "Ⓝ" : "USDC"}
+                {formatUnit(itemTotals.subtotal)}{" "}
+                <CurrencyIcon currency={currency} />
               </dd>
               <dt>Tax ({taxBps === null ? "?" : (taxBps / 100).toString()}%)</dt>
               <dd>
-                {formatUnit(itemTotals.taxAmount)} {unitLabel === "NEAR" ? "Ⓝ" : "USDC"}
+                {formatUnit(itemTotals.taxAmount)}{" "}
+                <CurrencyIcon currency={currency} />
               </dd>
               <dt>Total</dt>
               <dd>
-                {formatUnit(itemTotals.total)} {unitLabel === "NEAR" ? "Ⓝ" : "USDC"}
+                {formatUnit(itemTotals.total)}{" "}
+                <CurrencyIcon currency={currency} />
               </dd>
             </dl>
           )}
