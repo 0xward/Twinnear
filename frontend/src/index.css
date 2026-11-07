@@ -169,7 +169,7 @@ code,
 /* ---- paper cards ---- */
 .card {
   background: #fff;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 22px 24px;
@@ -191,6 +191,7 @@ code,
 .card h2 {
   margin: 0 0 4px;
   font-size: 22px;
+  font-weight: 700;
 }
 
 .card .sub {
@@ -581,7 +582,7 @@ fieldset.oneclick-disabled {
 
 .stat {
   background: #fff;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px 18px;
