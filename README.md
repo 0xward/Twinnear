@@ -20,7 +20,7 @@ Testnet only. No AI.
 
 ## Live status
 
-- **Contract:** `twinnear.testnet`, schema version 2 (`get_version` returns 2)
+- **Contract:** `twinnear.testnet`, schema version 3 (`get_version` returns 3)
 - **Wasm SHA-256:** `dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0`
 - **First deployed:** 7 November 2026. **Upgraded to v2:** same day, with
   an owner-only state migration (`migrate`). Invoice #1 survived the
@@ -29,7 +29,7 @@ Testnet only. No AI.
 - **About:** https://twinnear.vercel.app/#/about
 - **Guides:** https://twinnear.vercel.app/#/docs
 - **Repo:** https://github.com/0xward/Twinnear
-- **Tests:** 50 unit tests pass (`cargo test` in `contract/`)
+- **Tests:** 51 unit tests pass (`cargo test` in `contract/`)
 
 Invoices, retainers, the client portal, PDF export, and the pay flow
 (create, pay into escrow, release) all work against the live contract.
