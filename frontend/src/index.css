@@ -631,6 +631,11 @@ fieldset.oneclick-disabled {
 /* ---- page head ---- */
 .page-head {
   margin: 4px 0 18px;
+  /* Hairline under the title block (P1): the head reads as a
+   * masthead for the page, not as the first paragraph. Shared by
+   * every page that uses .page-head. */
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .page-head h1,
@@ -642,6 +647,13 @@ fieldset.oneclick-disabled {
 
 .page-head p {
   margin: 0;
+}
+
+/* The "New here?" help line, on its own line under the intro
+ * instead of mixed into it (P1). */
+.page-head .page-head-help {
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 /* ---- invoice number ---- */
@@ -1114,11 +1126,12 @@ table.ledger tfoot tr:last-child td {
 }
 
 /* ---- trust strip (Ledger) ---- */
+/* Two rows (P1): row 1 is live facts only; row 2, below a hairline,
+ * is the claim plus the links — facts, claims, and links no longer
+ * share one undifferentiated paragraph. */
 .trust-strip {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 16px;
+  flex-direction: column;
   background: var(--paper-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1126,6 +1139,23 @@ table.ledger tfoot tr:last-child td {
   margin-bottom: 18px;
   font-size: 13px;
   color: var(--ink-soft);
+}
+
+.trust-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.trust-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
 }
 
 .trust-strip .stamp {

@@ -44,41 +44,48 @@ export default function TrustStrip() {
 
   return (
     <div className="trust-strip" aria-label="Live status">
-      <span className="stamp stamp-paid">Testnet</span>
-      <span>
-        Contract{" "}
-        <a
-          href={`${EXPLORER_URL}/accounts/${CONTRACT_ID}`}
-          target="_blank"
-          rel="noreferrer"
-        >
-          {CONTRACT_ID}
-        </a>
-        {version !== null && ` · schema v${version}`}
-      </span>
-      {count !== null && (
+      {/* Row 1 — live facts only. Row 2 (below the hairline) holds
+       * the claim and the links, so facts, claims, and links no
+       * longer share one undifferentiated voice (P1). */}
+      <div className="trust-facts">
+        <span className="stamp stamp-paid">Testnet</span>
         <span>
-          {count} invoice{count === 1 ? "" : "s"} on chain
+          Contract{" "}
+          <a
+            href={`${EXPLORER_URL}/accounts/${CONTRACT_ID}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {CONTRACT_ID}
+          </a>
+          {version !== null && ` · schema v${version}`}
         </span>
-      )}
-      {escrowed !== null && (
-        <span style={{ whiteSpace: "nowrap" }}>
-          {formatNear(escrowed)} <CurrencyIcon currency="Near" /> in escrow
-          now
+        {count !== null && (
+          <span>
+            {count} invoice{count === 1 ? "" : "s"} on chain
+          </span>
+        )}
+        {escrowed !== null && (
+          <span style={{ whiteSpace: "nowrap" }}>
+            {formatNear(escrowed)} <CurrencyIcon currency="Near" /> in
+            escrow now
+          </span>
+        )}
+      </div>
+      <div className="trust-claim">
+        <span>No fees. No signup. No custody.</span>
+        {/* Links grouped and pushed right: they travel as one unit
+         * (they no longer dangle one per line when the strip wraps
+         * on a phone). */}
+        <span className="trust-links">
+          <span>
+            <Link to="/invoice/1">See invoice #1, paid and released</Link>
+          </span>
+          <span>
+            <Link to="/about">What is Twinnear?</Link>
+          </span>
         </span>
-      )}
-      <span>No fees. No signup. No custody.</span>
-      {/* Links grouped and pushed right: facts stay left, the two
-       * links travel as one unit (they no longer dangle one per
-       * line when the strip wraps on a phone). */}
-      <span className="trust-links">
-        <span>
-          <Link to="/invoice/1">See invoice #1, paid and released</Link>
-        </span>
-        <span>
-          <Link to="/about">What is Twinnear?</Link>
-        </span>
-      </span>
+      </div>
     </div>
   );
 }

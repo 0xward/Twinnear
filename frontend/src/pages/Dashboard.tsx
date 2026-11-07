@@ -155,8 +155,10 @@ export default function Dashboard() {
         <h1>The ledger</h1>
         <p className="muted">
           What you have received, what is held in escrow, and what is still
-          owed to you, at a glance. New here?{" "}
-          <Link to="/about">Read what Twinnear is</Link>.
+          owed to you, at a glance.
+        </p>
+        <p className="muted page-head-help">
+          New here? <Link to="/about">Read what Twinnear is</Link>.
         </p>
       </div>
 
