@@ -57,8 +57,8 @@ export default function NewInvoice() {
   // M-06: after a successful submit, do NOT navigate away immediately
   // — the transaction is not final yet and the list would not show
   // the new invoice. Show the tx hash + explorer link and a manual
-  // "Refresh status" button instead (same pattern as Pay/Policy/
-  // Deploy), and only then offer the way to the invoice list.
+  // "Refresh status" button instead (same pattern as Pay/Policy),
+  // and only then offer the way to the invoice list.
   const [done, setDone] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [createdInvoiceId, setCreatedInvoiceId] = useState<number | null>(null);

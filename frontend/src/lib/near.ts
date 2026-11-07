@@ -12,8 +12,6 @@
  * so formatting stays synchronous and dependency-free.
  *
  * QA fixes in this file:
- * - H-01: `isContractDeployed` uses `view_code` (an existing account
- *   without code is NOT deployed) instead of `view_account`.
  * - H-07: `setPolicy` throws on an unparseable amount instead of
  *   silently storing "no limit".
  * - M-02: `confirmExternalPayment` validates the reference format.
@@ -193,33 +191,6 @@ export async function accountExists(accountId: string): Promise<boolean> {
   }
 }
 
-/**
- * True when the contract account actually has code deployed (H-01).
- * Uses `view_code`: an account that merely EXISTS (e.g. the funded but
- * not-yet-deployed twinnear.testnet) correctly reports false.
- *
- * Banner root cause (verified 2026-11-07 via raw RPC): the raw
- * `view_code` response returns the field `code_base64`, NOT `code`.
- * The old code read `res.code` (always undefined) and always reported
- * "not deployed". Read `code_base64` first, fall back to `code`.
- */
-export async function isContractDeployed(): Promise<boolean> {
-  try {
-    const res = await rpcQuery<{ code_base64?: string; code?: string }>(
-      "query",
-      {
-        request_type: "view_code",
-        account_id: CONTRACT_ID,
-        finality: "final",
-      },
-    );
-    const code = res.code_base64 ?? res.code;
-    return typeof code === "string" && code.length > 0;
-  } catch {
-    return false;
-  }
-}
-
 export async function listInvoices(
   fromIndex = 1,
   limit = 100,
@@ -352,49 +323,6 @@ export async function confirmExternalPayment(
     );
   }
   return callContract("confirm_external_payment", { id, reference }, "0");
-}
-
-/**
- * Deploy the Twinnear contract from the browser. The wallet must hold a
- * full-access key for CONTRACT_ID (twinnear.testnet — created in Meteor).
- * Sends DeployContract + init `new` in a single transaction, signed in
- * the user's wallet. Implemented in phase 2; NOT yet verified with a
- * live wallet click-through — see DEPLOY.md.
- */
-export async function deployContract(code: Uint8Array): Promise<unknown> {
-  const selector = await getSelector();
-  const wallet = await selector.wallet();
-  return wallet.signAndSendTransaction({
-    receiverId: CONTRACT_ID,
-    actions: [
-      { type: "DeployContract", params: { code } },
-      {
-        type: "FunctionCall",
-        params: {
-          methodName: "new",
-          args: { owner: CONTRACT_ID },
-          gas: GAS_100_TGAS,
-          deposit: "0",
-        },
-      },
-    ],
-  });
-}
-
-/**
- * Redeploy (upgrade) the contract code WITHOUT initializing.
- * DeployContract only — no `new` call, so the existing state (and
- * owner) survives. After this lands, the state must be migrated with
- * the owner-only `migrate` call via near-cli-rs (see DEPLOY.md) —
- * NEVER call `new` again after a redeploy, it would wipe the ledger.
- */
-export async function redeployContract(code: Uint8Array): Promise<unknown> {
-  const selector = await getSelector();
-  const wallet = await selector.wallet();
-  return wallet.signAndSendTransaction({
-    receiverId: CONTRACT_ID,
-    actions: [{ type: "DeployContract", params: { code } }],
-  });
 }
 
 const GAS_100_TGAS = "100000000000000"; // wallet-selector v8 expects strings

@@ -120,7 +120,7 @@ export default function PayInvoice() {
   /**
    * M-05: pre-flight balance check — paying attaches the FULL invoice
    * amount plus gas, so compare the client's LIVE available balance
-   * first (same pattern as the Deploy page) instead of letting the
+   * first (same pattern as elsewhere in the app) instead of letting the
    * wallet fail with a generic error and burn gas.
    * NEAR escrow only — USDC invoices never reach this button
    * (they settle via 1Click, see below).

@@ -71,8 +71,8 @@ They were tested end to end on 7 November 2026.
 - **Bookkeeper dashboard.** Totals for received, in escrow, pending,
   and refunded, per-client totals, and **CSV export**.
 - **Deploy from the terminal.** near-cli-rs from a computer or Termux.
-  The browser deploy form is blocked by Meteor Wallet, which refuses
-  the DeployContract action.
+  There is no browser deploy: Meteor Wallet refuses the
+  DeployContract action.
 
 ## How it works
 
@@ -139,9 +139,6 @@ troubleshooting): **[DEPLOY.md](DEPLOY.md)**.
   deploy and init separately), and `without-init-call` plus the
   owner-only `migrate` for upgrades. Tested from Termux (proot-distro
   Ubuntu, aarch64 binary) on 2026-11-07.
-- **Browser form:** the Deploy page keeps a deploy form, but Meteor
-  Wallet refuses the DeployContract action ("Contract deployment
-  blocked"), so it only works with a wallet that allows it.
 
 > Storage: the optimized 213 KB wasm locks about 2.1 NEAR of storage
 > stake on the account (1 NEAR per 100 KB). Fund the deployer account
@@ -216,7 +213,7 @@ twinnear/
 │       ├── lib/recurring.ts # retainer templates (localStorage)
 │       ├── lib/csv.ts       # bookkeeper CSV export
 │       └── pages/           # Dashboard, Invoices, New invoice, Pay link,
-│                            # Spend guard, Deploy, Retainers, Client portal
+│                            # Spend guard, Retainers, Client portal
 ├── docs/                # research notes, QA audit, design decisions
 ├── README.md
 ├── DEPLOY.md
@@ -270,10 +267,9 @@ this build. This build is payments only.
   near-api-js's serializer, but no verification artifact is in this
   repo. Final confirmation against a real Meteor signature is still
   open.
-- **The browser deploy form is blocked by Meteor.** Meteor Wallet
-  refuses the DeployContract action, so the Deploy page's form cannot
-  deploy from Meteor. near-cli-rs (see [DEPLOY.md](DEPLOY.md)) is the
-  working path, tested from Termux on 2026-11-07.
+- **There is no browser deploy.** Meteor Wallet refuses the
+  DeployContract action, so deploys go through near-cli-rs (see
+  [DEPLOY.md](DEPLOY.md)), tested from Termux on 2026-11-07.
 
 ## License
 

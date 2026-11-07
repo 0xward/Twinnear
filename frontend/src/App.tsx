@@ -1,13 +1,10 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import WalletButton from "./components/WalletButton";
-import { isContractDeployed } from "./lib/near";
-import { CONTRACT_ID } from "./lib/config";
 
 // Route pages are lazy-loaded so the initial bundle stays small; the
 // heavy NEAR libraries live in lib/near.ts behind dynamic import().
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Deploy = lazy(() => import("./pages/Deploy"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const NewInvoice = lazy(() => import("./pages/NewInvoice"));
 const PayInvoice = lazy(() => import("./pages/PayInvoice"));
@@ -24,14 +21,6 @@ function PageFallback() {
 }
 
 export default function App() {
-  const [deployed, setDeployed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    isContractDeployed()
-      .then(setDeployed)
-      .catch(() => setDeployed(false));
-  }, []);
-
   return (
     <div className="sheet">
       <header className="masthead">
@@ -53,16 +42,7 @@ export default function App() {
         <NavLink to="/recurring">Retainers</NavLink>
         <NavLink to="/portal">Client portal</NavLink>
         <NavLink to="/settings">Spend guard</NavLink>
-        <NavLink to="/deploy">Deploy</NavLink>
       </nav>
-
-      {deployed === false && (
-        <div className="notice" aria-live="polite">
-          <strong>Contract not deployed yet.</strong> The Twinnear contract (
-          <code>{CONTRACT_ID}</code>) is not deployed on testnet yet. Follow README “Deploy the contract” first. The pages below will work once
-          it is deployed.
-        </div>
-      )}
 
       <Suspense fallback={<PageFallback />}>
         <Routes>
@@ -73,7 +53,6 @@ export default function App() {
           <Route path="/portal" element={<Portal />} />
           <Route path="/pay/:id" element={<PayInvoice />} />
           <Route path="/settings" element={<PolicyPage />} />
-          <Route path="/deploy" element={<Deploy />} />
           <Route
             path="*"
             element={
@@ -90,7 +69,8 @@ export default function App() {
 
       <footer className="footer">
         Twinnear is a port of TwinPayAI (Stacks) to NEAR. Only the NEAR
-        integration is new. Testnet only.{" "}
+        integration is new. Testnet only. Contract twinnear.testnet ·
+        schema v2.{" "}
         <Link to="/">Ledger</Link> ·{" "}
         <a
           href="https://github.com/0xward/Twinnear"
