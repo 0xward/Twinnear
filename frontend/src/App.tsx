@@ -70,6 +70,7 @@ export default function App() {
         <NavLink to="/recurring">Retainers</NavLink>
         <NavLink to="/portal">Client portal</NavLink>
         <NavLink to="/spend-guard">Spend guard</NavLink>
+        <NavLink to="/about">About</NavLink>
       </nav>
 
       {/* Keyed by pathname so the page entrance plays on every
@@ -112,7 +113,6 @@ export default function App() {
 
       <footer className="footer">
         <nav className="footer-nav" aria-label="Learn more">
-          <Link to="/about">About</Link>
           <Link to="/docs">Docs</Link>
           <Link to="/faq">FAQ</Link>
           <Link to="/privacy">Privacy</Link>
