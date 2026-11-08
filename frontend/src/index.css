@@ -1242,6 +1242,8 @@ table.ledger tfoot tr:last-child td {
 }
 
 .proof-card {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 14px 16px;
@@ -1584,6 +1586,8 @@ table.ledger tfoot tr:last-child td {
 }
 
 .step {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: #fff;
@@ -1669,6 +1673,8 @@ table.ledger tfoot tr:last-child td {
 }
 
 .feature-card {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--line-strong);
   border-top: 3px solid var(--logo-lavender);
   border-radius: var(--radius);
@@ -1733,6 +1739,37 @@ table.ledger tfoot tr:last-child td {
   color: var(--accent);
 }
 
+/* ---- card watermarks (components/CardWatermark.tsx) ---- */
+/* One faint icon per card, 120px in the bottom-right corner, bled
+ * 20px off the edge and cropped by the card's overflow:hidden, so
+ * it reads as ambience, never as content. The fill and opacity come
+ * from the component (darkened wash colour, 10% / 8% on cream).
+ * Text rides above at z-index 1; the mark is decorative
+ * (aria-hidden, pointer-events none) and static, so it needs no
+ * reduced-motion handling. */
+.wm {
+  position: absolute;
+  right: -20px;
+  bottom: -20px;
+  width: 120px;
+  height: 120px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.wm svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.step > :not(.wm),
+.feature-card > :not(.wm),
+.proof-card > :not(.wm) {
+  position: relative;
+  z-index: 1;
+}
+
 .faq-mini h3 {
   font-size: 17px;
   margin: 20px 0 4px;
@@ -1791,6 +1828,11 @@ table.ledger tfoot tr:last-child td {
   .steps-grid,
   .feature-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wm {
+    width: 88px;
+    height: 88px;
   }
 
   .hero h1 {

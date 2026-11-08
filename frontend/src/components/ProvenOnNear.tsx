@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import CardWatermark from "./CardWatermark";
 
 /**
  * "Proven on NEAR" — three real on-chain receipts from the testnet
@@ -32,6 +33,7 @@ export default function ProvenOnNear() {
       </p>
       <div className="proof-grid">
         <div className="proof-card stagger-item tint-green">
+          <CardWatermark tint="tint-green" icon="handshake" />
           <h3>Invoice #1, paid and released</h3>
           <p>
             0.05 NEAR, paid by the client into escrow and released to the
@@ -50,6 +52,7 @@ export default function ProvenOnNear() {
           </p>
         </div>
         <div className="proof-card stagger-item tint-teal">
+          <CardWatermark tint="tint-teal" icon="gas" />
           <h3>Invoice #4, created gasless</h3>
           <p>
             The seller paid no gas. A signed message, verified by the

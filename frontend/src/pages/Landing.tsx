@@ -1,5 +1,8 @@
 import { Link } from "react-router-dom";
 import PayAssetIcon, { type PayAsset } from "../components/PayAssetIcon";
+import CardWatermark, {
+  type WatermarkIcon,
+} from "../components/CardWatermark";
 import Reveal from "../components/Reveal";
 import Tilt from "../components/Tilt";
 import ProvenOnNear from "../components/ProvenOnNear";
@@ -22,38 +25,46 @@ const PAY_OPTIONS: { asset: PayAsset; label: string }[] = [
   { asset: "BTC", label: "BTC on Bitcoin" },
 ];
 
-const FEATURES: { title: string; body: string }[] = [
+const FEATURES: { title: string; body: string; wm: WatermarkIcon }[] = [
   {
     title: "Escrow, dispute, and refund",
     body: "The client pays into the contract, not to you. A dispute blocks the release. A refund goes back on chain.",
+    wm: "shield",
   },
   {
     title: "Gasless creation",
     body: "A single-line NEAR invoice costs the seller no gas. Sign a message in your wallet and a relayer submits it.",
+    wm: "gas",
   },
   {
     title: "Retainers",
     body: "Recurring invoices that create themselves, on a schedule you set. For clients who pay every month.",
+    wm: "calendar",
   },
   {
     title: "Client portal",
     body: "Your client sees every invoice you sent them, in one place, with its status. No account needed to look.",
+    wm: "people",
   },
   {
     title: "PDF and CSV",
     body: "Download a clean PDF for any invoice, or export the whole ledger as CSV for your books.",
+    wm: "doc-check",
   },
   {
     title: "Spend guard",
     body: "A max per invoice, a daily cap, and a seller allowlist. An emergency brake on what you can be charged.",
+    wm: "shield",
   },
   {
     title: "Line items and tax",
     body: "Break the total into items, add tax, and show the client exactly what they are paying for.",
+    wm: "layers",
   },
   {
     title: "Public invoice view",
     body: "Any invoice opens in a browser with no wallet. Share it, check it, verify it on the explorer.",
+    wm: "share",
   },
 ];
 
@@ -135,6 +146,7 @@ export default function Landing() {
           </h2>
           <div className="steps-grid">
             <Tilt className="step tint-blue">
+              <CardWatermark tint="tint-blue" icon="doc-check" />
               <div className="step-num" aria-hidden="true">
                 01
               </div>
@@ -146,6 +158,7 @@ export default function Landing() {
               </p>
             </Tilt>
             <Tilt className="step tint-lavender">
+              <CardWatermark tint="tint-lavender" icon="share" />
               <div className="step-num" aria-hidden="true">
                 02
               </div>
@@ -157,6 +170,7 @@ export default function Landing() {
               </p>
             </Tilt>
             <Tilt className="step tint-teal">
+              <CardWatermark tint="tint-teal" icon="cash" />
               <div className="step-num" aria-hidden="true">
                 03
               </div>
@@ -249,6 +263,10 @@ export default function Landing() {
                 className={`feature-card stagger-item ${FEATURE_TINTS[i % FEATURE_TINTS.length]}`}
                 key={f.title}
               >
+                <CardWatermark
+                  tint={FEATURE_TINTS[i % FEATURE_TINTS.length]}
+                  icon={f.wm}
+                />
                 <h3>{f.title}</h3>
                 <p>{f.body}</p>
               </div>
