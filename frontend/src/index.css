@@ -145,19 +145,25 @@ code,
   margin-top: 3px;
 }
 
+/* The main nav is a real bar now, not a faint row of pills: a
+ * cream band with a border, semibold links, and a solid green
+ * active state, so the seven app pages read at a glance. */
 .nav {
   display: flex;
   gap: 4px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   margin-bottom: 28px;
   flex-wrap: wrap;
 }
 
 .nav a {
-  color: var(--ink-soft);
-  font-size: 14px;
-  padding: 6px 12px;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 14px;
   border-radius: 999px;
   text-decoration: none;
   transition:
@@ -165,17 +171,19 @@ code,
     color 0.18s ease;
 }
 
-.nav a:hover,
-.nav a.active {
+.nav a:hover {
   background: var(--accent-soft);
   color: var(--accent);
   text-decoration: none;
 }
 
-/* The current page reads as a destination, not just a hover: same
- * soft fill, but semibold so it holds its weight among the pills. */
+/* The current page reads as a destination, not just a hover: a
+ * solid green pill with white text, so it holds its weight among
+ * the other links. */
 .nav a.active {
-  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
 }
 
 /* ---- paper cards ---- */
@@ -638,6 +646,31 @@ fieldset.oneclick-disabled {
   border-top: 1px solid var(--line);
   color: var(--ink-faint);
   font-size: 12.5px;
+}
+
+/* The footer is where the learning pages live now (About, Docs,
+ * FAQ, Privacy): a bold teal row that stands out from the fine
+ * print below it, so it reads as navigation, not small print. */
+.footer-nav {
+  display: flex;
+  gap: 6px 22px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.footer-nav a {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--logo-teal);
+  text-decoration: none;
+}
+
+.footer-nav a:hover {
+  text-decoration: underline;
+}
+
+.footer-fine {
+  margin: 0;
 }
 
 .muted {

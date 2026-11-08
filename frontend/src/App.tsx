@@ -17,6 +17,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const About = lazy(() => import("./pages/About"));
 const Docs = lazy(() => import("./pages/Docs"));
 const Faq = lazy(() => import("./pages/Faq"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const NewInvoice = lazy(() => import("./pages/NewInvoice"));
 const PayInvoice = lazy(() => import("./pages/PayInvoice"));
@@ -69,9 +70,6 @@ export default function App() {
         <NavLink to="/recurring">Retainers</NavLink>
         <NavLink to="/portal">Client portal</NavLink>
         <NavLink to="/spend-guard">Spend guard</NavLink>
-        <NavLink to="/about">About</NavLink>
-        <NavLink to="/docs">Docs</NavLink>
-        <NavLink to="/faq">FAQ</NavLink>
       </nav>
 
       {/* Keyed by pathname so the page entrance plays on every
@@ -96,6 +94,7 @@ export default function App() {
           <Route path="/about" element={<About />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/faq" element={<Faq />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route
             path="*"
             element={
@@ -112,17 +111,23 @@ export default function App() {
       </div>
 
       <footer className="footer">
-        Freelancer invoicing on NEAR. Testnet only. Contract
-        twinnear.testnet · schema v4.{" "}
-        <Link to="/about">About</Link> · <Link to="/docs">Docs</Link> ·{" "}
-        <Link to="/faq">FAQ</Link> · <Link to="/ledger">Ledger</Link> ·{" "}
-        <a
-          href="https://github.com/0xward/Twinnear"
-          target="_blank"
-          rel="noreferrer"
-        >
-          0xward/Twinnear
-        </a>
+        <nav className="footer-nav" aria-label="Learn more">
+          <Link to="/about">About</Link>
+          <Link to="/docs">Docs</Link>
+          <Link to="/faq">FAQ</Link>
+          <Link to="/privacy">Privacy</Link>
+        </nav>
+        <p className="footer-fine">
+          Freelancer invoicing on NEAR. Testnet only. Contract
+          twinnear.testnet · schema v4.{" "}
+          <a
+            href="https://github.com/0xward/Twinnear"
+            target="_blank"
+            rel="noreferrer"
+          >
+            0xward/Twinnear
+          </a>
+        </p>
       </footer>
     </div>
   );
