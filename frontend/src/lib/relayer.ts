@@ -44,12 +44,19 @@
  * of a cent.
  *
  * Canonical message format (must match relayer-server/ exactly):
- *   twinnear:create_invoice|<seller>|<client>|<amountYocto>|<description>|<counter>|<nonceBase64>
+ *   twinnear:create_invoice|<seller>|<client>|<amountYocto>|<description>|<counter>|<nonceBase64>|<milestonesJson>|<splitsJson>
+ * v5: the two trailing fields are the compact JSON of the milestones
+ * and splits arrays (amounts as strings, e.g.
+ * `[{"description":"Design","amount":"500"}]`, `[]` when empty) — the
+ * contract verifies them on-chain, so a relayer cannot attach a
+ * milestone plan or a split the seller never signed for.
  */
 
 import { Buffer } from "buffer";
 import { getSelector, getMetaNonce } from "./near";
 import { CONTRACT_ID } from "./config";
+import { milestonesJson, splitsJson } from "./milestones";
+import type { MilestoneInput, SplitShareInput } from "./types";
 
 /** Relayer server base URL, e.g. http://localhost:3001. Unset = no relayer. */
 export const RELAYER_URL: string | undefined =
@@ -85,6 +92,9 @@ export interface MetaPayload {
   message: string;
   /** NEP-413 recipient - the contract account. */
   recipient: string;
+  /** v5: milestones + splits, signed into the message (see buildMetaPayload). */
+  milestones: MilestoneInput[];
+  splits: SplitShareInput[];
 }
 
 function base64(bytes: Uint8Array): string {
@@ -100,6 +110,8 @@ export function buildMetaPayload(
   description: string,
   counter: number,
   nonceBytes?: Uint8Array,
+  milestones: MilestoneInput[] = [],
+  splits: SplitShareInput[] = [],
 ): MetaPayload {
   const nonce = nonceBytes ?? crypto.getRandomValues(new Uint8Array(32));
   const nonceB64 = base64(nonce);
@@ -111,8 +123,10 @@ export function buildMetaPayload(
     counter,
     nonce: nonceB64,
     nonceBytes: nonce,
-    message: `twinnear:create_invoice|${seller}|${client}|${amountYocto}|${description}|${counter}|${nonceB64}`,
+    message: `twinnear:create_invoice|${seller}|${client}|${amountYocto}|${description}|${counter}|${nonceB64}|${milestonesJson(milestones)}|${splitsJson(splits)}`,
     recipient: CONTRACT_ID,
+    milestones,
+    splits,
   };
 }
 
@@ -174,6 +188,9 @@ export interface SubmitMetaParams {
   description: string;
   /** Payment deadline in days (1–90), or null for no deadline. */
   dueDays: number | null;
+  /** v5: funded milestones + splits (NEAR only, signed into the message). */
+  milestones?: MilestoneInput[];
+  splits?: SplitShareInput[];
 }
 
 export class RelayerDuplicateError extends Error {
@@ -205,6 +222,9 @@ export async function submitMetaTransaction(
     params.amountYocto,
     params.description,
     counter,
+    undefined,
+    params.milestones ?? [],
+    params.splits ?? [],
   );
   const signed = await signMetaPayload(payload);
   const res = await fetch(`${RELAYER_URL}/relay/create-invoice`, {
@@ -222,6 +242,8 @@ export async function submitMetaTransaction(
       signature: signed.signature,
       publicKey: signed.publicKey,
       dueDays: params.dueDays,
+      milestones: signed.payload.milestones,
+      splits: signed.payload.splits,
     }),
     // M-07: never hang forever when the relayer is down.
     signal: AbortSignal.timeout(15_000),

@@ -72,3 +72,47 @@ export interface UsdcPolicy {
   /** Day number (`block_timestamp_ns / 86_400_000_000_000`). */
   daily_spent_day: number;
 }
+
+// ---- v5: funded milestones + programmable splits ----
+
+/** Lifecycle of one funded milestone (contract v5). */
+export type MilestoneState =
+  | "Pending"
+  | "Submitted"
+  | "ChangesRequested"
+  | "Released";
+
+/** One funded milestone of an invoice (view `get_milestones`). */
+export interface Milestone {
+  /** Max 200 bytes. */
+  description: string;
+  /** This milestone's share of the invoice amount, yoctoNEAR. */
+  amount: string;
+  state: MilestoneState;
+  /** Block timestamp (ns) of the current submission; null while not
+   *  awaiting review. The 14-day window runs from here. */
+  submitted_at: number | null;
+  /** Last reason the client gave with `request_changes`; null unless
+   *  the milestone is currently ChangesRequested. */
+  change_reason: string | null;
+}
+
+/** A milestone as passed at invoice creation (v5). */
+export interface MilestoneInput {
+  description: string;
+  /** YoctoNEAR, as a decimal string. */
+  amount: string;
+}
+
+/** One split recipient as passed at invoice creation (v5). */
+export interface SplitShareInput {
+  account: string;
+  /** Share in basis points, 1..=10000. All shares sum to 10000. */
+  share_bps: number;
+}
+
+/** One stored split recipient (view `get_splits`). */
+export interface SplitShare {
+  account: string;
+  share_bps: number;
+}

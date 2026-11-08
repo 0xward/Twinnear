@@ -29,7 +29,7 @@ import type { providers } from "near-api-js";
 import type { WalletSelector } from "@near-wallet-selector/core";
 import type { WalletSelectorModal } from "@near-wallet-selector/modal-ui";
 import { CONTRACT_ID, NETWORK_ID, RPC_URL } from "./config";
-import type { Invoice, Policy, UsdcPolicy } from "./types";
+import type { Invoice, Milestone, MilestoneInput, Policy, SplitShare, SplitShareInput, UsdcPolicy } from "./types";
 
 let selectorPromise: Promise<WalletSelector> | null = null;
 let modal: WalletSelectorModal | null = null;
@@ -473,6 +473,12 @@ export const STORAGE_DEPOSIT_NEAR = "0.01";
  * `taxRateBps` must be 0 then; with line items the contract asserts
  * amount == subtotal + tax. The caller computes the total first
  * (see `computeInvoiceTotal` in lib/invoiceMath.ts).
+ *
+ * v5: `milestones` and `splits` are the last two args (contract
+ * `create_invoice`). NEAR only: the contract rejects them for USDC
+ * invoices. Milestone amounts are yoctoNEAR strings and must sum
+ * exactly to `amount`; split shares are basis points summing to
+ * exactly 10000. Empty arrays = a plain invoice, exactly as before.
  */
 export async function createInvoice(
   client: string,
@@ -482,6 +488,8 @@ export async function createInvoice(
   currency: "Near" | "Usdc" = "Near",
   items: import("./types").LineItem[] = [],
   taxRateBps = 0,
+  milestones: MilestoneInput[] = [],
+  splits: SplitShareInput[] = [],
 ): Promise<unknown> {
   return callContract(
     "create_invoice",
@@ -493,8 +501,73 @@ export async function createInvoice(
       currency,
       items,
       tax_rate_bps: taxRateBps,
+      milestones,
+      splits,
     },
     STORAGE_DEPOSIT_YOCTO,
+  );
+}
+
+/** Funded milestones of an invoice (v5 view). Empty = plain invoice. */
+export async function getMilestones(invoiceId: number): Promise<Milestone[]> {
+  return (await viewCall("get_milestones", {
+    invoice_id: invoiceId,
+  })) as Milestone[];
+}
+
+/** Programmable split recipients of an invoice (v5 view). Empty = 100% to the seller. */
+export async function getSplits(invoiceId: number): Promise<SplitShare[]> {
+  return (await viewCall("get_splits", {
+    invoice_id: invoiceId,
+  })) as SplitShare[];
+}
+
+/** Seller marks one milestone's work as done (v5). Invoice must be Paid. */
+export async function submitWork(
+  invoiceId: number,
+  milestoneIndex: number,
+): Promise<unknown> {
+  return callContract(
+    "submit_work",
+    { invoice_id: invoiceId, milestone_index: milestoneIndex },
+    "0",
+  );
+}
+
+/** Client approves a submitted milestone (v5): releases its amount at once, split by the invoice splits. */
+export async function approveMilestone(
+  invoiceId: number,
+  milestoneIndex: number,
+): Promise<unknown> {
+  return callContract(
+    "approve_milestone",
+    { invoice_id: invoiceId, milestone_index: milestoneIndex },
+    "0",
+  );
+}
+
+/** Client sends a submitted milestone back for changes (v5). */
+export async function requestChanges(
+  invoiceId: number,
+  milestoneIndex: number,
+  reason: string,
+): Promise<unknown> {
+  return callContract(
+    "request_changes",
+    { invoice_id: invoiceId, milestone_index: milestoneIndex, reason },
+    "0",
+  );
+}
+
+/** Seller claims a submitted milestone after the 14-day window (v5). */
+export async function claimMilestone(
+  invoiceId: number,
+  milestoneIndex: number,
+): Promise<unknown> {
+  return callContract(
+    "claim_milestone",
+    { invoice_id: invoiceId, milestone_index: milestoneIndex },
+    "0",
   );
 }
 

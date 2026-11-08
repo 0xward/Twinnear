@@ -18,6 +18,7 @@ import CopyButton from "../components/CopyButton";
 import CurrencyBadge from "../components/CurrencyBadge";
 import FiatEstimate from "../components/FiatEstimate";
 import InvoiceTimeline from "../components/InvoiceTimeline";
+import MilestoneChecklist from "../components/MilestoneChecklist";
 import { downloadInvoicePdf } from "../lib/invoicePdf";
 import Reveal from "../components/Reveal";
 
@@ -291,6 +292,8 @@ export default function PublicInvoice() {
       <hr className="rule" />
       <h3 style={{ margin: "0 0 12px" }}>Where this invoice stands</h3>
       <InvoiceTimeline invoice={invoice} />
+
+      <MilestoneChecklist invoice={invoice} account={null} />
 
       <hr className="rule" />
       <h3 style={{ margin: "0 0 12px" }}>On chain</h3>

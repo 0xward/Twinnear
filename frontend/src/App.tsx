@@ -119,7 +119,7 @@ export default function App() {
         </nav>
         <p className="footer-fine">
           Freelancer invoicing on NEAR. Testnet only. Contract
-          twinnear.testnet · schema v4.{" "}
+          twinnear.testnet · schema v5.{" "}
           <a
             href="https://github.com/0xward/Twinnear"
             target="_blank"

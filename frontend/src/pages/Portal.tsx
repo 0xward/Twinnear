@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import {
   formatDate,
   friendlyError,
+  getMilestones,
   getSignedInAccount,
+  getSplits,
   listAllInvoices,
   onAccountChange,
 } from "../lib/near";
@@ -12,6 +14,7 @@ import { stampClass } from "../lib/invoiceStatus";
 import CurrencyBadge from "../components/CurrencyBadge";
 import { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
+import MilestoneChecklist from "../components/MilestoneChecklist";
 import Reveal from "../components/Reveal";
 import type { Invoice } from "../lib/types";
 
@@ -37,6 +40,10 @@ export default function Portal() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Paid invoices that carry a milestone plan or splits (v5).
+  const [milestoneInvoiceIds, setMilestoneInvoiceIds] = useState<number[]>(
+    [],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,13 +53,32 @@ export default function Portal() {
       setAccount(acct);
       if (acct) {
         const { invoices: all } = await listAllInvoices();
-        setInvoices(
-          all
-            .filter((i) => i.client === acct)
-            .sort((a, b) => b.created_at - a.created_at),
+        const mine = all
+          .filter((i) => i.client === acct)
+          .sort((a, b) => b.created_at - a.created_at);
+        setInvoices(mine);
+        // Which paid invoices have a milestone plan? One view call
+        // each — the portal lists a client's own invoices, a short list.
+        const paid = mine.filter((i) => i.status === "Paid");
+        const withPlan = await Promise.all(
+          paid.map(async (inv) => {
+            try {
+              const [m, s] = await Promise.all([
+                getMilestones(inv.id),
+                getSplits(inv.id),
+              ]);
+              return m.length > 0 || s.length > 0 ? inv.id : null;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        setMilestoneInvoiceIds(
+          withPlan.filter((id): id is number => id !== null),
         );
       } else {
         setInvoices([]);
+        setMilestoneInvoiceIds([]);
       }
     } catch (e) {
       setError(friendlyError(e));
@@ -229,6 +255,35 @@ export default function Portal() {
             until the seller confirms the work is done. Fiat amounts are
             rough estimates, not the rate you will be paid at.
           </p>
+
+          {milestoneInvoiceIds.length > 0 && (
+            <>
+              <h3 style={{ margin: "18px 0 8px" }}>Milestones</h3>
+              <p className="sub">
+                Parts of your paid invoices, and where each part stands.
+                Approve work you are happy with, or ask for changes.
+              </p>
+              {invoices
+                .filter((inv) => milestoneInvoiceIds.includes(inv.id))
+                .map((inv) => (
+                  <div key={inv.id} style={{ marginTop: 14 }}>
+                    <p className="muted" style={{ margin: "0 0 4px" }}>
+                      <Link to={`/pay/${inv.id}`}>
+                        {invoiceRef(inv)}
+                      </Link>{" "}
+                      · {inv.description || "No description"} ·{" "}
+                      <InvoiceAmount invoice={inv} />
+                    </p>
+                    <MilestoneChecklist
+                      invoice={inv}
+                      account={account}
+                      onChanged={load}
+                      showHeading={false}
+                    />
+                  </div>
+                ))}
+            </>
+          )}
         </>
       )}
     </div>

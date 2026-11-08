@@ -1038,6 +1038,57 @@ fieldset.oneclick-disabled {
   min-width: 0;
 }
 
+/* ---- v5: milestones + splits ---- */
+/* Same grid language as the line items: description, amount, remove.
+ * The checklist rows reuse the paper card look (border + wash-free
+ * white) with the state stamp on the right. */
+.milestone-head,
+.milestone-row {
+  display: grid;
+  grid-template-columns: 1fr 130px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.milestone-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+.milestone-row input {
+  min-width: 0;
+}
+
+.milestone-check {
+  margin-top: 18px;
+}
+
+.milestone-check-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-top: 10px;
+  background: #fff;
+}
+
+.milestone-check-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.milestone-check-head .num {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .btn-small {
   min-height: 0;
   padding: 6px 12px;
@@ -1173,6 +1224,15 @@ table.ledger tfoot tr:last-child td {
   .line-item-head,
   .line-item-row {
     grid-template-columns: 1fr 56px 96px auto;
+  }
+
+  .milestone-head,
+  .milestone-row {
+    grid-template-columns: 1fr 96px auto;
+  }
+
+  .milestone-head {
+    display: none;
   }
 
   .line-item-head {

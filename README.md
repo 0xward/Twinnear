@@ -20,20 +20,23 @@ Testnet only. No AI.
 
 ## Live status
 
-- **Contract:** `twinnear.testnet`, schema version 4 (`get_version` returns 4)
-  — v4 code is ready and pushed; the on-chain contract is still v3 until
+- **Contract:** `twinnear.testnet`, schema version 5 (`get_version` returns 5)
+  — v5 code is ready and pushed; the on-chain contract is still v4 until
   the owner runs the redeploy + migrate in `DEPLOY.md`
-- **Wasm SHA-256 (v4):** `3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`
+- **Wasm SHA-256 (v5):** `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
 - **First deployed:** 7 November 2026. **Upgraded to v2:** same day, with
   an owner-only state migration (`migrate`). Invoice #1 survived the
   migration unchanged. **Upgraded to v3:** same day, code-only (NEP-413
   verification fix, no migrate). **v4:** USDC spend-guard caps +
   39 adversarial/conformance tests (redeploy + migrate, see `DEPLOY.md`).
+  **Upgraded to v4:** 7 November 2026, 22:26 WIB (redeploy + migrate).
+  **v5:** funded milestones + programmable splits (redeploy + migrate,
+  see `DEPLOY.md`).
 - **Site:** https://twinnear.vercel.app
 - **About:** https://twinnear.vercel.app/#/about
 - **Guides:** https://twinnear.vercel.app/#/docs
 - **Repo:** https://github.com/0xward/Twinnear
-- **Tests:** 90 unit tests pass (`cargo test` in `contract/`)
+- **Tests:** 123 unit tests pass (`cargo test` in `contract/`)
 
 Invoices, retainers, the client portal, PDF export, and the pay flow
 (create, pay into escrow, release) all work against the live contract.
@@ -51,7 +54,7 @@ Each step is "do X, see Y".
    transactions (create, pay, release) linked to the explorer.
 2. Check the contract is live on testnet.
    Do: open https://testnet.nearblocks.io/accounts/twinnear.testnet
-   See: the contract account, schema v2, and the recent
+   See: the contract account, schema v4, and the recent
    transactions. The contract holds no funds of its own; escrowed
    funds sit in the contract only while an invoice is unpaid.
 3. Check the deployed code matches the source.
@@ -61,16 +64,16 @@ Each step is "do X, see Y".
      -d '{"jsonrpc":"2.0","id":"t","method":"query","params":{"request_type":"view_code","account_id":"twinnear.testnet","finality":"final"}}' \
      | python3 -c "import json,sys,base64,hashlib; d=json.load(sys.stdin); print(hashlib.sha256(base64.b64decode(d['result']['code_base64'])).hexdigest())"
    ```
-   See: `dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0`
-   That is the SHA-256 of the v2 build (USDC, line items and tax,
-   migrate; 213,007 bytes). The wasm file itself is not in the repo
+   See: `3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`
+   That is the SHA-256 of the v4 build (USDC spend-guard caps,
+   224,493 bytes). The wasm file itself is not in the repo
    (it is gitignored); the source it was built from is in
    `contract/src/lib.rs`. The compiled wasm in `contract/target/` is
    a stale debug build with a different hash; do not use it for
    verification.
 4. Run the tests.
    Do: `cd contract && cargo test`
-   See: 50 passed, 0 failed.
+   See: 123 passed, 0 failed.
    Do: `cd frontend && npm install && npm run build`
    See: a clean build.
 
@@ -93,6 +96,10 @@ Each step is "do X, see Y".
 - **Line items, tax, and PDF.** An invoice can list line items with a
   tax rate. The contract checks the arithmetic, and the pay page
   exports a PDF invoice.
+- **Funded milestones and programmable splits.** A NEAR invoice can be
+  split into up to 5 funded parts, each released when its work is done,
+  and every release can be shared with up to 3 people. See "Funded
+  milestones and programmable splits" below.
 - **Retainers.** Recurring invoice templates (weekly, monthly,
   quarterly) kept in the browser. One click generates the invoices
   that are due.
@@ -114,6 +121,48 @@ Each step is "do X, see Y".
 - **Deploy from the terminal.** near-cli-rs from a computer or Termux.
   There is no browser deploy: Meteor Wallet refuses the
   DeployContract action.
+
+## Funded milestones and programmable splits
+
+A NEAR invoice can be split into up to 5 funded parts
+("milestones"), and every release can be shared with up to 3 people
+("splits"). Both are set when the invoice is created and cannot be
+changed later. A plain invoice — no milestones, no splits — works
+exactly as before.
+
+How one milestone moves:
+
+1. The client funds the whole invoice up front, into escrow, as
+   usual. The parts are just a plan for how the money comes out.
+2. The seller sends the work for one part ("Submit work").
+3. The client approves it ("Approve and release") and that part is
+   paid out at once, shared by the splits. Or the client asks for
+   changes, with a reason, and the seller sends the work again.
+4. If the client stays silent, the seller can claim the part after
+   **14 days** from when the work was sent. The contract cannot wake
+   itself up, so the claim is a button the seller presses — the same
+   manual pattern as the refund claim.
+
+Rules that matter:
+
+- Milestone amounts must add up to exactly the invoice total. A part
+  is at most 200 bytes of description and more than zero.
+- Split percents must add up to exactly 100%. Every recipient must
+  get at least 0.002 NEAR from each release; the contract rejects a
+  split that would pay less. A split share is the amount times the
+  percent, rounded down, with any leftover dust going to the first
+  recipient.
+- A dispute blocks approvals and claims, but not asking for changes.
+  Releasing the whole invoice pays out every part that is still
+  waiting, at once. A refund returns only the parts that have not
+  been released yet.
+- Milestones and splits are **NEAR only**. USDC never enters escrow —
+  1Click delivers it straight to the seller — so a USDC invoice
+  cannot be split into funded parts or shared releases. The form
+  says so when USDC is picked.
+- Gasless creation works with milestones and splits: the signed
+  NEP-413 message covers the milestone plan and the splits, so a
+  relayer cannot attach a plan the seller never agreed to.
 
 ## How it works
 
@@ -166,7 +215,8 @@ Then do this, and see this:
 | As the seller, click "Release to me" | Status becomes **Paid, released**, and the Ledger total "Received" increases by 0.5 Ⓝ |
 | Click "Export CSV" on the Ledger page | A `twinnear-invoices-YYYY-MM-DD.csv` download with all rows |
 
-The live contract is `twinnear.testnet` (schema v2). To redeploy
+The live contract is `twinnear.testnet` (schema v4; v5 code is ready,
+see "Live status" above). To redeploy
 after a contract change, see
 [Deploy the contract](#deploy-the-contract). Redeploy without init,
 then run the owner-only `migrate`.
@@ -244,21 +294,23 @@ account (a 64-character hex address) is enough for the payout address.
 | Method | Type | Notes |
 | --- | --- | --- |
 | `new(owner)` | init | Sets owner. Init is only callable by the contract account itself (atomic deploy and init). |
-| `create_invoice(client, amount, description, due_days, currency, items, tax_rate_bps)` | call, payable | Caller is the seller. Enforces the client policy. Requires a 0.01 NEAR storage deposit. `due_days` 1 to 90, or null. `currency` Near or Usdc. Up to 20 line items. Tax 0 to 100%. A single-line invoice must have tax 0 and subtotal equal to amount. |
-| `migrate()` | call | Owner only. Upgrades stored invoices to the current schema (v1 to v2). Ran successfully on 2026-11-07. |
-| `get_version()` | view | Current schema version (2). |
-| `create_invoice_meta(seller, client, amount, description, nonce, signature, public_key, nep413_nonce, due_days)` | call | Relayer only. Gasless invoice creation, nonce replay protection, NEP-413 signature checked on chain. Single-line NEAR invoices only. |
+| `create_invoice(client, amount, description, due_days, currency, items, tax_rate_bps, milestones, splits)` | call, payable | Caller is the seller. Enforces the client policy. Requires a 0.01 NEAR storage deposit. `due_days` 1 to 90, or null. `currency` Near or Usdc. Up to 20 line items. Tax 0 to 100%. A single-line invoice must have tax 0 and subtotal equal to amount. `milestones` (v5, NEAR only): up to 5 parts, amounts summing exactly to `amount`. `splits` (v5, NEAR only): up to 3 recipients, shares summing to exactly 10000 bps. |
+| `submit_work(invoice_id, milestone_index)` / `approve_milestone(invoice_id, milestone_index)` / `request_changes(invoice_id, milestone_index, reason)` / `claim_milestone(invoice_id, milestone_index)` | call | v5 milestone lifecycle. Seller submits work; client approves (releases the part at once, split by the invoice splits) or asks for changes with a reason (max 200 bytes); seller claims a submitted part after the 14-day window. Approvals and claims are blocked while disputed. |
+| `get_milestones(invoice_id)` / `get_splits(invoice_id)` | view | v5. The milestone plan and the split recipients of an invoice. Empty = plain invoice (no milestones) / 100% to the seller (no splits). |
+| `migrate()` | call | Owner only. Upgrades stored state to the current schema. Ran successfully for v2 and v4 on 2026-11-07; the v5 migration (v4 to v5) is pending the owner's Termux run. |
+| `get_version()` | view | Current schema version (5 in code; 4 on chain until the v5 deploy + migrate). |
+| `create_invoice_meta(seller, client, amount, description, nonce, signature, public_key, nep413_nonce, due_days, milestones, splits)` | call | Relayer only. Gasless invoice creation, nonce replay protection, NEP-413 signature checked on chain. Single-line NEAR invoices only. v5: the signed message covers the milestones + splits JSON. |
 | `set_relayer(relayer)` | call | Owner only. Sets or clears the trusted relayer. |
 | `propose_owner(new_owner)` / `accept_owner()` | call | Two-step owner transfer. |
 | `pay_invoice(id)` | call, payable | Caller is the client. Deposit must equal the amount. Funds go into escrow. Re-checks the client policy and daily cap. |
-| `release_invoice(id)` | call | Seller only. Sends escrow to the seller. Blocked while disputed. Finalised by callback. |
-| `refund_invoice(id)` | call | Seller only. Returns escrow to the client. Works even while disputed. Finalised by callback. |
-| `claim_refund(id)` | call | Client only, after the due date. Escrow goes back to the client. Finalised by callback. |
+| `release_invoice(id)` | call | Seller only. Sends escrow to the seller. Blocked while disputed. Finalised by callback. With milestones, releases every part that is still waiting, at once. |
+| `refund_invoice(id)` | call | Seller only. Returns escrow to the client. Works even while disputed. Finalised by callback. With milestones, returns only the parts that have not been released yet. |
+| `claim_refund(id)` | call | Client only, after the due date. Escrow goes back to the client. Finalised by callback. With milestones, claims only the unreleased parts. |
 | `cancel_invoice(id)` | call | Seller only, while Pending. No funds move. |
 | `open_dispute(id, reason)` / `withdraw_dispute(id)` | call | Client only, on a paid unreleased invoice. A dispute blocks release. |
 | `rescue_escrow(id, to)` | call | Owner only, after a recorded failed transfer. Last-resort recovery of stuck escrow. |
 | `confirm_external_payment(id, reference)` | call | Seller only. Closes a Pending invoice paid off chain (1Click) and records the reference (0x address, 42 chars, or tx hash, 66 chars). This is the seller saying payment arrived, not a check the contract can do. |
-| `set_policy(max_amount, allowed_sellers, max_total_per_day)` | call | Caller sets their own spend-guard. Daily accounting is kept across edits. |
+| `set_policy(max_amount, allowed_sellers, max_total_per_day, usdc_max_amount, usdc_daily_cap)` | call | Caller sets their own spend-guard. Daily accounting is kept across edits. The USDC caps are v4. |
 | `get_invoice(id)` / `list_invoices(from, limit)` | view | |
 | `get_policy(account_id)` / `get_owner()` / `get_relayer()` / `get_meta_nonce(account_id)` / `get_invoice_count()` / `get_open_invoice_count(account_id)` / `get_total_escrowed()` / `get_pending_owner()` | view | |
 

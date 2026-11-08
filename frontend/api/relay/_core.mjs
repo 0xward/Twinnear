@@ -146,8 +146,44 @@ function borshPayload(message, nonceBase64, recipient) {
   ]);
 }
 
-function canonicalMessage(seller, client, amount, description, counter, nonceBase64) {
-  return `twinnear:create_invoice|${seller}|${client}|${amount}|${description}|${counter}|${nonceBase64}`;
+function canonicalMessage(seller, client, amount, description, counter, nonceBase64, milestonesJson, splitsJson) {
+  return `twinnear:create_invoice|${seller}|${client}|${amount}|${description}|${counter}|${nonceBase64}|${milestonesJson}|${splitsJson}`;
+}
+
+/** Re-serialize milestones/splits in declaration order, exactly as
+ *  the client does (frontend/src/lib/milestones.ts): amounts as
+ *  strings, `{"description","amount"}` and `{"account","share_bps"}`.
+ *  Key order and spacing matter — the string is part of the signed
+ *  NEP-413 message, so any difference breaks verification. */
+function normalizeMilestones(raw) {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw badRequest("milestones must be an array");
+  return raw.map((m) => {
+    if (!m || typeof m.description !== "string") {
+      throw badRequest("each milestone needs a description string");
+    }
+    if (typeof m.amount !== "string" || !/^\d+$/.test(m.amount)) {
+      throw badRequest("each milestone amount must be a yoctoNEAR digit string");
+    }
+    if (Buffer.byteLength(m.description, "utf8") > 200) {
+      throw badRequest("milestone description must be at most 200 bytes");
+    }
+    return { description: m.description, amount: m.amount };
+  });
+}
+
+function normalizeSplits(raw) {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) throw badRequest("splits must be an array");
+  return raw.map((s) => {
+    if (!s || typeof s.account !== "string" || s.account.length === 0) {
+      throw badRequest("each split needs an account string");
+    }
+    if (!Number.isInteger(s.share_bps) || s.share_bps < 1 || s.share_bps > 10000) {
+      throw badRequest("each split share_bps must be an integer between 1 and 10000");
+    }
+    return { account: s.account, share_bps: s.share_bps };
+  });
 }
 
 // ---- NEAR helpers ----
@@ -351,6 +387,9 @@ async function handleRelay(headers, rawBody) {
     publicKey,
     dueDays,
   } = body;
+  // v5: milestones + splits, signed into the message (empty = plain invoice).
+  const milestones = normalizeMilestones(body.milestones);
+  const splits = normalizeSplits(body.splits);
 
   // (0) Basic field validation (400).
   for (const [name, v] of Object.entries({
@@ -396,6 +435,9 @@ async function handleRelay(headers, rawBody) {
     checkRateLimit(seller);
 
     // (1) The signed message must exactly match the submitted fields.
+    // v5: the message carries the milestones + splits JSON as its two
+    // trailing fields, so a relayer cannot attach a plan or a split
+    // the seller never signed for.
     const expected = canonicalMessage(
       seller,
       client,
@@ -403,6 +445,8 @@ async function handleRelay(headers, rawBody) {
       description,
       nonce,
       nonceBase64,
+      JSON.stringify(milestones),
+      JSON.stringify(splits),
     );
     if (message !== expected) {
       throw badRequest("Signed message does not match the submitted fields");
@@ -455,6 +499,8 @@ async function handleRelay(headers, rawBody) {
           public_key: publicKey,
           nep413_nonce: nonceBase64,
           due_days: dueDays ?? null,
+          milestones,
+          splits,
         },
         gas: GAS_100_TGAS,
         attachedDeposit: 0n,

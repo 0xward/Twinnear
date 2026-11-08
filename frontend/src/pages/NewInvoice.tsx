@@ -32,7 +32,23 @@ import {
   parseLineItemDraft,
 } from "../lib/invoiceMath";
 import type { LineItemDraft } from "../lib/invoiceMath";
-import type { Currency, LineItem } from "../lib/types";
+import type { Currency, LineItem, MilestoneInput, SplitShareInput } from "../lib/types";
+import {
+  validateMilestones,
+  validateSplits,
+} from "../lib/milestones";
+import MilestoneBuilder, {
+  EMPTY_MILESTONE,
+  draftsAreEmpty,
+  draftsToInputs,
+  type MilestoneDraft,
+} from "../components/MilestoneBuilder";
+import SplitEditor, {
+  EMPTY_SPLIT,
+  splitDraftsAreEmpty,
+  splitDraftsToInputs,
+  type SplitDraft,
+} from "../components/SplitEditor";
 import FiatEstimate from "../components/FiatEstimate";
 import AccountNameField from "../components/AccountNameField";
 import CurrencyIcon from "../components/CurrencyIcon";
@@ -76,6 +92,15 @@ export default function NewInvoice() {
   // ---- F2: line items + tax ----
   const [itemized, setItemized] = useState(false);
   const [rows, setRows] = useState<LineItemDraft[]>([{ ...EMPTY_ROW }]);
+  // ---- v5: funded milestones + programmable splits (NEAR only) ----
+  const [milestonesOn, setMilestonesOn] = useState(false);
+  const [milestoneRows, setMilestoneRows] = useState<MilestoneDraft[]>([
+    { ...EMPTY_MILESTONE },
+  ]);
+  const [splitsOn, setSplitsOn] = useState(false);
+  const [splitRows, setSplitRows] = useState<SplitDraft[]>([
+    { ...EMPTY_SPLIT },
+  ]);
   // Line-item errors only show once the user has touched a row (or
   // tried to submit): the first row starts with quantity "1"
   // prefilled, so it is not "empty" and would otherwise error on
@@ -186,6 +211,10 @@ export default function NewInvoice() {
     setRows([{ ...EMPTY_ROW }]);
     setRowsTouched(false);
     setTaxPct("");
+    setMilestoneRows([{ ...EMPTY_MILESTONE }]);
+    setMilestonesOn(false);
+    setSplitRows([{ ...EMPTY_SPLIT }]);
+    setSplitsOn(false);
   }
 
   /** Re-check the on-chain state after a submit: refresh the open
@@ -225,6 +254,8 @@ export default function NewInvoice() {
     totalSmallest: string;
     items: LineItem[];
     taxRateBps: number;
+    milestones: MilestoneInput[];
+    splits: SplitShareInput[];
   } {
     const clientTrimmed = client.trim();
     if (!isValidAccountId(clientTrimmed)) {
@@ -247,6 +278,43 @@ export default function NewInvoice() {
         `Description is ${descriptionBytes} bytes. The contract allows at most 500 bytes.`,
       );
     }
+    // v5: milestones + splits (NEAR only; USDC invoices carry none).
+    // Empty rows = no plan, even when the section is switched on.
+    function planFor(totalSmallest: string): {
+      milestones: MilestoneInput[];
+      splits: SplitShareInput[];
+    } {
+      if (currency !== "Near") return { milestones: [], splits: [] };
+      let milestones: MilestoneInput[] = [];
+      if (milestonesOn && !draftsAreEmpty(milestoneRows)) {
+        const inputs = draftsToInputs(milestoneRows);
+        if (inputs === null) {
+          throw new Error(
+            "One milestone amount is not a plain number. Use a number like 0.5.",
+          );
+        }
+        const err = validateMilestones(inputs, totalSmallest);
+        if (err) throw new Error(err);
+        milestones = inputs;
+      }
+      let splits: SplitShareInput[] = [];
+      if (splitsOn && !splitDraftsAreEmpty(splitRows)) {
+        const inputs = splitDraftsToInputs(splitRows);
+        if (inputs === null) {
+          throw new Error(
+            "One split percent is not a whole number. Use a number like 90.",
+          );
+        }
+        const releaseAmounts =
+          milestones.length > 0
+            ? milestones.map((m) => m.amount)
+            : [totalSmallest];
+        const err = validateSplits(inputs, releaseAmounts);
+        if (err) throw new Error(err);
+        splits = inputs;
+      }
+      return { milestones, splits };
+    }
     if (itemized) {
       if (parsedItems.rowError) throw new Error(parsedItems.rowError);
       if (parsedItems.items.length === 0) {
@@ -267,6 +335,7 @@ export default function NewInvoice() {
         totalSmallest: itemTotals.total,
         items: parsedItems.items,
         taxRateBps: taxBps,
+        ...planFor(itemTotals.total),
       };
     }
     const okAmount =
@@ -287,6 +356,7 @@ export default function NewInvoice() {
       totalSmallest,
       items: [],
       taxRateBps: 0,
+      ...planFor(totalSmallest),
     };
   }
 
@@ -304,6 +374,8 @@ export default function NewInvoice() {
       currency,
       args.items,
       args.taxRateBps,
+      args.milestones,
+      args.splits,
     );
   }
 
@@ -336,6 +408,8 @@ export default function NewInvoice() {
             amountYocto: args.totalSmallest,
             description: description.trim(),
             dueDays: dueDays(),
+            milestones: args.milestones,
+            splits: args.splits,
           });
           showCreated(result.txHash || null, result.invoiceId);
         } catch (err) {
@@ -359,6 +433,8 @@ export default function NewInvoice() {
           currency,
           args.items,
           args.taxRateBps,
+          args.milestones,
+          args.splits,
         );
         showCreated(extractTxHash(res), extractReturnU64(res));
       }
@@ -410,6 +486,19 @@ export default function NewInvoice() {
         - <CurrencyIcon currency={currency} />
       </>
     );
+
+  /** Amounts a split release can pay from: each milestone amount when
+   *  milestones are configured, otherwise the full invoice total. */
+  const splitReleaseAmounts = useMemo(() => {
+    if (currency !== "Near") return [];
+    if (milestonesOn) {
+      const inputs = draftsToInputs(milestoneRows);
+      if (inputs && inputs.length > 0) {
+        return inputs.map((m) => m.amount);
+      }
+    }
+    return computedTotalSmallest !== null ? [computedTotalSmallest] : [];
+  }, [currency, milestonesOn, milestoneRows, computedTotalSmallest]);
 
   return (
     <Reveal>
@@ -661,6 +750,76 @@ export default function NewInvoice() {
           </label>
         </p>
 
+        {currency === "Near" ? (
+          <>
+            <p className="muted" style={{ marginTop: 12 }}>
+              <label
+                style={{
+                  display: "inline",
+                  textTransform: "none",
+                  letterSpacing: 0,
+                  fontSize: 14,
+                  fontWeight: 400,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={milestonesOn}
+                  onChange={(e) => setMilestonesOn(e.target.checked)}
+                  style={{ width: "auto", marginRight: 8 }}
+                />
+                Split this invoice into milestones: the client funds the
+                whole amount up front, and each part is released when
+                its work is done.
+              </label>
+            </p>
+            {milestonesOn && (
+              <div style={{ marginTop: 12 }}>
+                <MilestoneBuilder
+                  rows={milestoneRows}
+                  onChange={setMilestoneRows}
+                  totalYocto={computedTotalSmallest}
+                />
+              </div>
+            )}
+            <p className="muted" style={{ marginTop: 12 }}>
+              <label
+                style={{
+                  display: "inline",
+                  textTransform: "none",
+                  letterSpacing: 0,
+                  fontSize: 14,
+                  fontWeight: 400,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={splitsOn}
+                  onChange={(e) => setSplitsOn(e.target.checked)}
+                  style={{ width: "auto", marginRight: 8 }}
+                />
+                Split each release: share every payment with up to 3
+                people.
+              </label>
+            </p>
+            {splitsOn && (
+              <div style={{ marginTop: 12 }}>
+                <SplitEditor
+                  rows={splitRows}
+                  onChange={setSplitRows}
+                  releaseAmountsYocto={splitReleaseAmounts}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="muted" style={{ marginTop: 12 }}>
+            Milestones and splits are NEAR only. USDC never enters
+            escrow, so a USDC invoice cannot be split into funded
+            parts or shared releases.
+          </p>
+        )}
+
         <label htmlFor="description">Description</label>
         <textarea
           id="description"
@@ -770,6 +929,41 @@ export default function NewInvoice() {
             {description.trim() || "No description yet"}
             {client.trim() ? ` · billed to ${client.trim()}` : ""}
           </p>
+          {milestonesOn &&
+            milestoneRows.some(
+              (r) => r.description.trim() !== "" || r.amount.trim() !== "",
+            ) && (
+              <p className="preview-meta">
+                Paid in{" "}
+                {
+                  milestoneRows.filter(
+                    (r) =>
+                      r.description.trim() !== "" || r.amount.trim() !== "",
+                  ).length
+                }{" "}
+                parts, released as the work is done.
+              </p>
+            )}
+          {splitsOn &&
+            splitRows.some(
+              (r) => r.account.trim() !== "" || r.percent.trim() !== "",
+            ) && (
+              <p className="preview-meta">
+                Each release is shared with{" "}
+                {
+                  splitRows.filter(
+                    (r) =>
+                      r.account.trim() !== "" || r.percent.trim() !== "",
+                  ).length
+                }{" "}
+                {splitRows.filter(
+                  (r) => r.account.trim() !== "" || r.percent.trim() !== "",
+                ).length === 1
+                  ? "person"
+                  : "people"}
+                .
+              </p>
+            )}
           <p className="preview-meta">
             Reference assigned on-chain (TW-YYYY-NNNN) ·{" "}
             {currency === "Usdc"

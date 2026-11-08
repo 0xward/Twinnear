@@ -38,6 +38,7 @@ import CurrencyBadge from "../components/CurrencyBadge";
 import CurrencyIcon, { InvoiceAmount } from "../components/CurrencyIcon";
 import FiatEstimate from "../components/FiatEstimate";
 import InvoiceTimeline from "../components/InvoiceTimeline";
+import MilestoneChecklist from "../components/MilestoneChecklist";
 import PayQr from "../components/PayQr";
 import { buildReminderText, invoiceRef } from "../lib/invoiceRef";
 import { downloadInvoicePdf } from "../lib/invoicePdf";
@@ -488,6 +489,12 @@ export default function PayInvoice() {
       <h3 style={{ margin: "0 0 4px" }}>Where this invoice stands</h3>
       <p className="sub">{statusExplainer}</p>
       <InvoiceTimeline invoice={invoice} />
+
+      <MilestoneChecklist
+        invoice={invoice}
+        account={account}
+        onChanged={load}
+      />
 
       {error && <div className="error" role="alert">{error}</div>}
       {done && <div className="notice" aria-live="polite">{done}</div>}

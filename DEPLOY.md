@@ -4,24 +4,42 @@ Target account: **`twinnear.testnet`** (created in Meteor Wallet, funded
 with 4 NEAR from the faucet — 0.2 NEAR is the storage reserve, ~3.8 NEAR
 usable).
 
-Contract status: **v3 LIVE** since 2026-11-07 (deployed via Termux +
-near-cli-rs, wasm 222,775 bytes, SHA-256
-`2894e4310c6972a2420bb02502cb60b9b84b13b51308966a9cca79669ee20835`).
+Contract status: **v4 LIVE** since 2026-11-07 (deployed via Termux +
+near-cli-rs, redeploy + migrate, wasm 224,493 bytes, SHA-256
+`3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`).
 The v2 upgrade was a **redeploy + migrate** — see "Redeploy + migrate
 (v2)" below. Never call `new` again after the first deploy.
 
-**v4 (2026-11-07, NOT YET DEPLOYED — code ready, awaiting the
-owner's Termux run): USDC spend-guard caps + 39 adversarial /
-conformance tests (90 unit tests total). This is a redeploy +
-MIGRATE upgrade — unlike v3, the state schema DOES change: the
-contract gains a new `usdc_policies` map (prefix `b"u"`), so after
-deploying the v4 wasm you MUST call `migrate` (owner only, one tx).
-Migration moves every invoice (#1–#4), the NEAR policies, the
-relayer, the meta nonces, and the escrow accounting over untouched
-and adds an initially empty USDC-policy map — nothing is reset. A
+**v5 (2026-11-08, NOT YET DEPLOYED — code ready, awaiting the
+owner's Termux run): funded milestones + programmable splits (123
+unit tests total: 90 old + 33 new). This is a redeploy + MIGRATE
+upgrade — the state schema DOES change: the contract gains two new
+maps, `milestones` (prefix `b"k"`) and `splits` (prefix `b"s"`), so
+after deploying the v5 wasm you MUST call `migrate` (owner only, one
+tx). Migration moves every invoice (#1–#4), the NEAR policies, the
+USDC policies, the relayer, the meta nonces, and the escrow accounting
+over untouched and adds the two initially empty maps — nothing is
+reset, and the `Invoice` struct itself is byte-identical to v4. A
 second `migrate` panics harmlessly and leaves the state untouched.
-After migrate, verify `get_version` returns 4 and invoice #1 is
-still Paid/released. New wasm: 224,493 bytes, SHA-256
+After migrate, verify `get_version` returns 5 and invoice #1 is
+still Paid/released. New wasm: 269,450 bytes, SHA-256
+`36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`.
+Download it from the repo:
+`https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm`
+— then check the SHA before deploying (see the exact Termux
+commands in "Redeploy + migrate (v5)" below).
+
+**v4 (2026-11-07, DEPLOYED 22:26 WIB): USDC spend-guard caps + 39
+adversarial / conformance tests (90 unit tests total). This is a
+redeploy + MIGRATE upgrade — unlike v3, the state schema DOES
+change: the contract gains a new `usdc_policies` map (prefix `b"u"`),
+so after deploying the v4 wasm you MUST call `migrate` (owner only,
+one tx). Migration moves every invoice (#1–#4), the NEAR policies,
+the relayer, the meta nonces, and the escrow accounting over
+untouched and adds an initially empty USDC-policy map — nothing is
+reset. A second `migrate` panics harmlessly and leaves the state
+untouched. After migrate, verify `get_version` returns 4 and invoice
+#1 is still Paid/released. New wasm: 224,493 bytes, SHA-256
 `3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`.
 Download it from the repo:
 `https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm`
@@ -214,6 +232,49 @@ near contract call-function as-read-only twinnear.testnet get_usdc_policy json-a
 #    NEP-413 verification are unchanged, but a redeploy is a redeploy):
 #    create a small invoice from the site as twinnear.testnet with the
 #    relayer, and confirm it lands on chain.
+```
+
+## Redeploy + migrate (v5 upgrade)
+
+Same shape as the v4 upgrade: v5 adds two new maps (`milestones`,
+`splits`) and leaves every stored value untouched. Run from Termux
+(proot-distro Ubuntu, near-cli-rs 0.31.1, `sign-with-legacy-keychain`):
+
+```bash
+# 0. Download the v5 wasm and CHECK the SHA before deploying.
+curl -sL -o twinnear.wasm \
+  https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm
+sha256sum twinnear.wasm
+# → 36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0
+#    (269,450 bytes). If the hash differs, STOP — do not deploy.
+
+# 1. Deploy the v5 wasm WITHOUT init.
+near contract deploy twinnear.testnet use-file twinnear.wasm without-init-call network-config testnet sign-with-legacy-keychain send
+
+# 2. Migrate the state v4 → v5 (owner only, one tx). REQUIRED for v5
+#    — the state schema changed. Moves invoices #1–#4, the NEAR and
+#    USDC policies, the relayer, meta nonces and escrow accounting over
+#    untouched; adds the empty milestones and splits maps. A second
+#    migrate panics harmlessly and leaves the state untouched.
+near contract call-function as-transaction twinnear.testnet migrate json-args '{}' prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' sign-as twinnear.testnet network-config testnet sign-with-legacy-keychain send
+
+# 3. Verify:
+near contract call-function as-read-only twinnear.testnet get_version json-args '{}' network-config testnet now
+# → 5
+near contract call-function as-read-only twinnear.testnet get_invoice json-args '{"id": 1}' network-config testnet now
+# → invoice #1 intact (0.05 NEAR, Paid, released)
+near contract call-function as-read-only twinnear.testnet get_milestones json-args '{"invoice_id": 1}' network-config testnet now
+# → [] (invoice #1 is a plain invoice, no milestones — expected)
+near contract call-function as-read-only twinnear.testnet get_splits json-args '{"invoice_id": 1}' network-config testnet now
+# → [] (no splits — expected)
+
+# 4. Re-test the gasless flow end to end (the NEP-413 message gained
+#    two trailing fields, milestones + splits JSON — the relayer and
+#    the frontend both build the new message, but a redeploy is a
+#    redeploy): create a small invoice from the site as
+#    twinnear.testnet with the relayer, and confirm it lands on chain.
+#    Then create one small milestone invoice (2 parts) from the site
+#    and walk one milestone through submit → approve on chain.
 ```
 
 Current build (v1, 2026-11-07, phase 2 + QA fixes, optimized):
