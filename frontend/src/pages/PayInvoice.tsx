@@ -14,6 +14,7 @@ import {
   getInvoice,
   getSignedInAccount,
   isUsdcInvoice,
+  onAccountChange,
   openDispute,
   payInvoice,
   refundInvoice,
@@ -91,6 +92,27 @@ export default function PayInvoice() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Follow wallet account changes live (same as the header and the
+  // client portal): the Pay / Approve / Release buttons all depend
+  // on which account is signed in, so a switch must re-render this
+  // page without a manual refresh. Only the account is updated
+  // here — the invoice itself is re-read on mount / manual refresh
+  // (M-06: never auto-reload right after a submit, the transaction
+  // is not final yet and the old status would confuse everyone).
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    onAccountChange((acct) => {
+      setAccount(acct);
+    })
+      .then((unsub) => {
+        unsubscribe = unsub;
+      })
+      .catch(() => undefined);
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
 
   // Prefill the seller-confirmation field from the live quote (M-02):
   // the deposit address is the proof, no manual copy-paste needed.

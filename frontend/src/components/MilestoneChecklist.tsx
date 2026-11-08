@@ -78,7 +78,7 @@ function MilestoneRow({
   index: number;
   account: string | null;
   splits: SplitShare[];
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
 }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,7 +96,15 @@ function MilestoneRow({
     try {
       await fn();
       setReason("");
-      onChanged();
+      try {
+        // Wait for the milestone list to finish reloading before
+        // re-enabling the buttons: the rows still show the old state
+        // until then, and a fast second tap would re-submit an action
+        // the contract has already applied (and rightly rejects).
+        await onChanged();
+      } catch {
+        // A reload hiccup must not masquerade as a failed action.
+      }
     } catch (e) {
       setError(`${label} failed: ${friendlyError(e)}`);
     } finally {
@@ -280,7 +288,7 @@ export default function MilestoneChecklist({
   /** Signed-in account, or null for the public (read-only) view. */
   account: string | null;
   /** Called after a successful action, so the parent reloads the invoice. */
-  onChanged?: () => void;
+  onChanged?: () => void | Promise<void>;
   /** Hide the section heading + intro (when the parent already labels the section). */
   showHeading?: boolean;
 }) {
@@ -315,9 +323,10 @@ export default function MilestoneChecklist({
     load();
   }, [load]);
 
-  function handleChanged() {
-    load();
-    onChanged?.();
+  function handleChanged(): Promise<void> {
+    return load().then(() => {
+      onChanged?.();
+    });
   }
 
   if (milestones === null) {
