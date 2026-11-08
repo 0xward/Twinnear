@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import PayAssetIcon, { type PayAsset } from "../components/PayAssetIcon";
 import Reveal from "../components/Reveal";
+import Tilt from "../components/Tilt";
 import ProvenOnNear from "../components/ProvenOnNear";
 import TrustStrip from "../components/TrustStrip";
 import { EXPLORER_URL } from "../lib/config";
@@ -106,10 +107,15 @@ export default function Landing() {
             the exact invoice amount, in NEAR or USDC.
           </p>
           <ul className="pay-pills">
-            {PAY_OPTIONS.map((option) => (
+            {PAY_OPTIONS.map((option, i) => (
               <li key={option.label} className="stagger-item">
-                <PayAssetIcon asset={option.asset} />
-                {option.label}
+                <span
+                  className="pill-bob"
+                  style={{ animationDelay: `${(i * 0.18).toFixed(2)}s` }}
+                >
+                  <PayAssetIcon asset={option.asset} />
+                  {option.label}
+                </span>
               </li>
             ))}
           </ul>
@@ -128,7 +134,7 @@ export default function Landing() {
             through us.
           </h2>
           <div className="steps-grid">
-            <div className="step stagger-item tint-blue">
+            <Tilt className="step tint-blue">
               <div className="step-num" aria-hidden="true">
                 01
               </div>
@@ -138,8 +144,8 @@ export default function Landing() {
                 and the client. A single-line invoice can be created
                 gasless: you sign a message, a relayer submits it.
               </p>
-            </div>
-            <div className="step stagger-item tint-lavender">
+            </Tilt>
+            <Tilt className="step tint-lavender">
               <div className="step-num" aria-hidden="true">
                 02
               </div>
@@ -149,8 +155,8 @@ export default function Landing() {
                 opens it on their phone and pays. No account, no app to
                 install.
               </p>
-            </div>
-            <div className="step stagger-item tint-teal">
+            </Tilt>
+            <Tilt className="step tint-teal">
               <div className="step-num" aria-hidden="true">
                 03
               </div>
@@ -160,7 +166,7 @@ export default function Landing() {
                 delivery. If things go wrong, refund the client, or the
                 client claims a refund after the due date.
               </p>
-            </div>
+            </Tilt>
           </div>
         </section>
       </Reveal>

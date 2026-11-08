@@ -1592,39 +1592,53 @@ table.ledger tfoot tr:last-child td {
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
-  /* Ambient float: the three step cards bob gently in sequence,
-   * forever, with no scroll needed. Staggered delays so they do
-   * not move in sync. Hover pauses the bob; the shadow still
-   * deepens. Pure transform, GPU-accelerated. */
-  animation: float-card 6s ease-in-out infinite;
-}
-
-.steps-grid .step:nth-child(1) {
-  animation-delay: 0s;
-}
-
-.steps-grid .step:nth-child(2) {
-  animation-delay: 0.8s;
-}
-
-.steps-grid .step:nth-child(3) {
-  animation-delay: 1.6s;
-}
-
-@keyframes float-card {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6px);
-  }
 }
 
 .step:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(28, 26, 23, 0.1);
-  animation-play-state: paused;
+}
+
+/* Mouse-follow 3D tilt (components/Tilt.tsx): the card tips toward
+ * the cursor, up to 12 degrees, with its shadow shifting along.
+ * The tilt is set as an inline transform by the component, so the
+ * 0.12s transition here keeps the follow smooth instead of
+ * snappy. The numeral pops forward on the z-axis while the card
+ * tilts, so the depth reads. Touch devices get no tilt (there is
+ * no cursor); the pills below still bob on every device. */
+.tilt {
+  will-change: transform;
+  transform-style: preserve-3d;
+  transition:
+    transform 0.12s ease-out,
+    box-shadow 0.12s ease-out;
+}
+
+.tilt .step-num {
+  transform: translateZ(24px);
+  transition: transform 0.12s ease-out;
+}
+
+/* Wave bob for the ten pay pills: each pill bobs gently on a
+ * 3.2s loop, staggered 0.18s apart by inline delay, so the row
+ * reads as a wave. The bob lives on an inner span so it never
+ * fights the scroll reveal on the pill itself. Pure transform,
+ * GPU-accelerated, and it runs on touch devices too. */
+.pill-bob {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: pill-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes pill-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 
 .step-num {
@@ -1816,7 +1830,8 @@ table.ledger tfoot tr:last-child td {
 
   .card,
   .stat,
-  .step {
+  .step,
+  .pill-bob {
     animation: none;
   }
 
