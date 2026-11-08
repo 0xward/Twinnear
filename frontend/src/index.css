@@ -1516,6 +1516,30 @@ table.ledger tfoot tr:last-child td {
   flex-shrink: 0;
 }
 
+/* ---- "Why Twinnear" proof list ---- */
+/* A ruled list, not cards: this section argues with evidence, so it
+ * reads as proof rather than another feature grid. */
+.proof-list > div {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.proof-list > div:first-child {
+  border-top: 0;
+}
+
+.proof-list h3 {
+  font-size: 17px;
+  margin: 0 0 4px;
+}
+
+.proof-list p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
 /* How-it-works steps and feature cards: paper cards with a large
  * serif numeral, and a small lift on hover so the page feels alive
  * without changing colour or layout. */

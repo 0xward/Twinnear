@@ -303,6 +303,74 @@ export default function Landing() {
 
       <Reveal>
         <section className="landing-section">
+          <p className="section-eyebrow">Why Twinnear</p>
+          <h2 className="section-title">
+            A ledger, not just a payment link.
+          </h2>
+          <p className="section-sub">
+            A payment link moves money. Twinnear holds it, records it,
+            and gives it a way out. Four things the demo proves, and one
+            honest limit.
+          </p>
+          <div className="proof-list">
+            <div className="stagger-item">
+              <h3>A full lifecycle, not a dead end.</h3>
+              <p>
+                Escrow, dispute, refund, and rescue. Some escrows hold
+                the money with no way out: if the client never approves,
+                the funds sit forever. Twinnear&apos;s escrow always has
+                an exit.
+              </p>
+            </div>
+            <div className="stagger-item">
+              <h3>Gasless, proven on chain.</h3>
+              <p>
+                Invoice #4 was created without the seller paying gas. A
+                signed message, verified by the server, submitted by the
+                relayer.{" "}
+                <a
+                  href={`${EXPLORER_URL}/transactions/2iMVmF156UnK3WR1nHJxnwgCYSisy8585NNGQtBKnXz4`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  See the transaction
+                </a>
+                .
+              </p>
+            </div>
+            <div className="stagger-item">
+              <h3>Tested like it holds real money.</h3>
+              <p>
+                90 unit tests pass, including adversarial tests and a
+                60-action random walk. No formal audit yet, and the docs
+                say so plainly.
+              </p>
+            </div>
+            <div className="stagger-item">
+              <h3>Built for mainnet, rehearsed on testnet.</h3>
+              <p>
+                The same contract deploys to mainnet with no code change,
+                and 1Click is mainnet-only, so the ten ways to pay become
+                fully real there. This demo runs on testnet with play
+                money from the faucet.{" "}
+                <Link to="/docs">Read the mainnet guide</Link>.
+              </p>
+            </div>
+            <div className="stagger-item">
+              <h3>Honest about USDC.</h3>
+              <p>
+                A USDC invoice is paid straight to the seller and closed
+                by the seller&apos;s own confirmation. It never enters
+                escrow, so the full escrow protection applies to NEAR
+                invoices. The invoice says so on the page.
+              </p>
+            </div>
+          </div>
+        </section>
+      </Reveal>
+
+      <Reveal>
+        <section className="landing-section">
           <p className="section-eyebrow">Questions, first</p>
           <h2 className="section-title">
             The objections, answered plainly.
