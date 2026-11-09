@@ -57,7 +57,12 @@ export default function App() {
             <small>Freelancer invoicing on NEAR</small>
           </span>
         </Link>
-        <WalletButton />
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 10 }}
+        >
+          <span className="stamp stamp-testnet">Testnet demo</span>
+          <WalletButton />
+        </div>
       </header>
 
       <nav className="nav" aria-label="Main navigation">
