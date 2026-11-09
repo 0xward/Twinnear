@@ -4,30 +4,33 @@ Target account: **`twinnear.testnet`** (created in Meteor Wallet, funded
 with 4 NEAR from the faucet — 0.2 NEAR is the storage reserve, ~3.8 NEAR
 usable).
 
-Contract status: **v4 LIVE** since 2026-11-07 (deployed via Termux +
-near-cli-rs, redeploy + migrate, wasm 224,493 bytes, SHA-256
-`3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`).
-The v2 upgrade was a **redeploy + migrate** — see "Redeploy + migrate
-(v2)" below. Never call `new` again after the first deploy.
+Contract status: **v5 LIVE** since 2026-11-08 11:52 WIB (deployed via
+Termux + near-cli-rs, redeploy + migrate, wasm 269,450 bytes, SHA-256
+`36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`,
+123 unit tests pass). Upgrades are **redeploy + migrate** — see
+"Redeploy + migrate (v5)" below. Never call `new` again after the
+first deploy.
 
-**v5 (2026-11-08, NOT YET DEPLOYED — code ready, awaiting the
-owner's Termux run): funded milestones + programmable splits (123
-unit tests total: 90 old + 33 new). This is a redeploy + MIGRATE
-upgrade — the state schema DOES change: the contract gains two new
-maps, `milestones` (prefix `b"k"`) and `splits` (prefix `b"s"`), so
-after deploying the v5 wasm you MUST call `migrate` (owner only, one
-tx). Migration moves every invoice (#1–#4), the NEAR policies, the
-USDC policies, the relayer, the meta nonces, and the escrow accounting
-over untouched and adds the two initially empty maps — nothing is
-reset, and the `Invoice` struct itself is byte-identical to v4. A
-second `migrate` panics harmlessly and leaves the state untouched.
-After migrate, verify `get_version` returns 5 and invoice #1 is
-still Paid/released. New wasm: 269,450 bytes, SHA-256
+## Version history
+
+**v5 (2026-11-08, DEPLOYED 11:52 WIB):** funded milestones +
+programmable splits (123 unit tests total: 90 old + 33 new). This
+was a redeploy + MIGRATE upgrade — the state schema DID change: the
+contract gained two new maps, `milestones` (prefix `b"k"`) and
+`splits` (prefix `b"s"`), so after deploying the v5 wasm the owner
+called `migrate` (owner only, one tx). Migration moved every invoice
+(#1–#4), the NEAR policies, the USDC policies, the relayer, the meta
+nonces, and the escrow accounting over untouched and added the two
+initially empty maps — nothing was reset, and the `Invoice` struct
+itself is byte-identical to v4. A second `migrate` panics harmlessly
+and leaves the state untouched. After migrate, `get_version`
+returned 5 and invoice #1 was still Paid/released. Wasm: 269,450
+bytes, SHA-256
 `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`.
-Download it from the repo:
+The wasm is in the repo:
 `https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm`
-— then check the SHA before deploying (see the exact Termux
-commands in "Redeploy + migrate (v5)" below).
+— the exact Termux commands used are in "Redeploy + migrate (v5)"
+below.
 
 **v4 (2026-11-07, DEPLOYED 22:26 WIB): USDC spend-guard caps + 39
 adversarial / conformance tests (90 unit tests total). This is a
@@ -153,7 +156,7 @@ near contract call-function as-read-only twinnear.testnet get_invoice_count \
 # → 0
 ```
 
-## Termux (phone) — the path that deployed v1
+## Termux (phone) — the path that deployed v1–v5
 
 The user's phone runs the deploy from Termux (proot-distro Ubuntu),
 because the desktop binary is x86_64 and the phone is aarch64:
@@ -168,7 +171,7 @@ because the desktop binary is x86_64 and the phone is aarch64:
 
 ## Redeploy + migrate (v2 upgrade)
 
-The v1 contract is already live with real invoices. The upgrade
+The v1 contract was already live with real invoices. The upgrade
 replaces the code and migrates the state in place — the ledger
 survives. Two steps, both from the CLI:
 
@@ -277,18 +280,19 @@ near contract call-function as-read-only twinnear.testnet get_splits json-args '
 #    and walk one milestone through submit → approve on chain.
 ```
 
-Current build (v1, 2026-11-07, phase 2 + QA fixes, optimized):
-- Size: **194,009 bytes** (raw cargo build 242,681 bytes after `strip`)
-- SHA-256: `5c1c22243b9ce154d7f31da2d34185067208d2030647060a2869d1f6c6e09b1b`
-- 40/40 unit tests pass (was 12 before the QA-fix contract changes).
+Current build (v5, 2026-11-08, funded milestones + programmable splits,
+optimized):
+- Size: **269,450 bytes**
+- SHA-256: `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
+- 123/123 unit tests pass (`cargo test` in `contract/`)
 
-The v2 wasm SHA will be published by the coordinator when the
-contract build lands — update `EXPECTED_WASM_SHA256` in
-`frontend/src/lib/config.ts` then (never guess it).
+`EXPECTED_WASM_SHA256` in `frontend/src/lib/config.ts` is the v5 hash
+above. After any future contract build, update it to the new wasm's
+SHA-256 (never guess it) and re-verify against the on-chain code.
 
-> Storage: a ~194 KB wasm locks ~1.9 NEAR of storage stake on
+> Storage: a ~269 KB wasm locks ~2.7 NEAR of storage stake on
 > the account (1 NEAR per 100 KB). With 4 NEAR in the account, about
-> 2.1 NEAR stays liquid after deploy — keep demo invoices small
+> 1.3 NEAR stays liquid after deploy — keep demo invoices small
 > (0.05–0.1 NEAR) and top the account up from the faucet again if it
 > runs low: https://near-faucet.io
 
@@ -321,7 +325,7 @@ To disable the relayer later: `set_relayer` with `{"relayer": null}`.
 ## Troubleshooting
 
 - **Deploy fails with "insufficient balance"**: the account needs
-  ~1.9 NEAR free for code storage. Check the balance on
+  ~2.7 NEAR free for code storage. Check the balance on
   https://testnet.nearblocks.io/accounts/twinnear.testnet and top up
   from the faucet.
 - **"account does not exist"**: the account was never created, or the
@@ -334,5 +338,6 @@ To disable the relayer later: `set_relayer` with `{"relayer": null}`.
   first (this VM: `export TMPDIR=$HOME/.tmp-build`) and retry.
 - **`migrate` fails with "only the owner can migrate"**: the call must
   be signed as `twinnear.testnet` (the `sign-as` in the command above).
-- **`get_version` returns nothing / "method not found"**: the v2 code
-  has not landed yet — redeploy first, then migrate.
+- **`get_version` returns nothing / "method not found"**: the current
+  code has not landed yet — redeploy first, then migrate if the
+  upgrade changed the schema.
