@@ -79,8 +79,14 @@ anything. So in production `RELAYER_API_KEY` is deliberately left
 unset, and the protection is layered instead:
 
 1. **Seller allowlist** (`RELAYER_ALLOWED_SELLERS`) - only listed
-   sellers can relay at all. Production allowlist:
-   `twinnear.testnet,0xward.testnet`.
+   sellers can relay at all. Production allowlist is configured via
+   the `RELAYER_ALLOWED_SELLERS` env var in the Vercel dashboard
+   (not in this repo): it currently holds 3 accounts
+   (`/api/health` reports `allowlistSize: 3`, verified 2026-11-09)
+   — `twinnear.testnet` and `0xward.testnet` are the two named in
+   this repo; the third account is set only via env, so its name is
+   not recorded here. If the env allowlist changes, update this
+   note and re-check `/api/health`.
 2. **NEP-413 signature** - every request must carry a valid signature
    over the exact invoice fields, made with the seller's own key.
 3. **Full-access key check** - the signing key must be a full-access
@@ -133,11 +139,17 @@ low on funds. If the relayer is down or rejects a request, the
 frontend offers the direct (user-pays-gas) path instead - the relayer
 is a single point of failure for gasless creation only (M-07).
 
-## Caveat
+## Caveat (corrected 2026-11-07)
 
-The Borsh layout of the NEP-413 payload (`borshPayload()` in
-`frontend/api/relay/_core.mjs`) was verified 2026-11-06 to be byte-identical to
-near-api-js's own Borsh serializer for the NEP-413 schema. Final
-confirmation against a real Meteor Wallet signature is still a
-phase-3 click-through item; if the wallet signs different bytes, fix
-it here - the contract does not depend on it.
+The 2026-11-06 claim that the Borsh layout of the NEP-413 payload
+(`borshPayload()` in `frontend/api/relay/_core.mjs`) was
+byte-identical to near-api-js's own Borsh serializer was WRONG. A
+real Meteor Wallet signature failed live verification with
+"NEP-413 signature verification failed": the payload was missing the
+hardcoded u32 tag 2147484061 (2^31 + 413) and the signature is over
+SHA-256 of the serialized payload, not the raw bytes (Wallet
+Selector `serializeNep413` / `verifySignature`, per NEP-413). Both
+are now included here AND in the contract's `verify_meta_signature`
+— the contract DOES depend on this layout, so the relayer and the
+contract must stay in sync. Gasless creation has worked end to end
+since the fix.
