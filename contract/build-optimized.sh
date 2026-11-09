@@ -7,8 +7,12 @@
 #
 # Output: contract/twinnear.wasm  (the DEPLOY artifact — use this file,
 # NOT target/.../release/twinnear.wasm, when deploying to twinnear.testnet)
-# The script prints size + SHA-256 of the output and verifies that all
-# 17 contract exports survive optimization.
+# The script prints size + SHA-256 of the raw and optimized output.
+# It does NOT verify that contract exports survive optimization — no
+# export check runs here. (For reference: src/lib.rs currently has
+# 37 `pub fn` methods; if an export check is ever added, compare the
+# export lists of the raw and optimized wasm instead of trusting a
+# hardcoded count.)
 #
 # wasm-opt binary: ../tools/wasm-opt (Binaryen version_123, x86_64-linux).
 # If it is missing, the script downloads Binaryen 123 and extracts it
