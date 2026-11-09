@@ -97,7 +97,7 @@ export default function Docs() {
             <span>
               Enter the client&apos;s account, the amount, and a short
               description. Add line items and tax if you need them, and
-              a due date if you want one.
+              a due date (required: 7, 14, or 30 days).
             </span>
           </li>
           <li>
@@ -123,9 +123,9 @@ export default function Docs() {
           </li>
         </ol>
         <p className="muted">
-          Limits: an invoice needs a due date if you want the client to
-          have a claim-refund escape. Without one, only a dispute or
-          your own refund can move the money back.
+          Limits: every invoice has a due date (7, 14, or 30 days).
+          After the due date passes, the client can claim a refund, so
+          the escrow can never lock up with no way out.
         </p>
       </div>
       </Reveal>
