@@ -8,17 +8,20 @@
  * nonce, and submits `create_invoice_meta` to the contract from the
  * funded relayer account. The seller never pays gas.
  *
- * Trust model (documented, not hidden): the contract trusts the relayer
- * account (set by the owner via `set_relayer`, rotatable, clearable with
- * `set_relayer(null)`). The relayer verifies the NEP-413 signature
- * off-chain AND the contract re-verifies it on-chain (M-01), so a
- * compromised relayer cannot forge an invoice for a seller whose key
- * it does not hold - see relayer-server/ for the reference server,
- * including how it checks the signer's key against the account's
- * on-chain access keys and reconstructs the Borsh-serialized NEP-413
- * payload. The contract enforces replay protection with a per-seller
- * nonce and only accepts meta calls from the relayer account; the
- * signature and public key are logged on-chain for audit.
+ * Trust model (documented, not hidden): the relayer is fully trusted
+ * for invoice creation. The contract trusts the relayer account (set
+ * by the owner via `set_relayer`, rotatable, clearable with
+ * `set_relayer(null)`), and only it may submit `create_invoice_meta`.
+ * The relayer verifies the NEP-413 signature off-chain AND the
+ * contract re-verifies it on-chain (M-01) — but that check only
+ * proves the signature is valid and the nonce is fresh. It does NOT
+ * prove the signing key belongs to the seller, so a compromised
+ * relayer could forge an invoice in a seller's name. The contract
+ * enforces replay protection with a per-seller nonce and only accepts
+ * meta calls from the relayer account; the signature and public key
+ * are logged on-chain for audit. See relayer-server/ for the
+ * reference server and how it verifies the signature and
+ * reconstructs the Borsh-serialized NEP-413 payload.
  * CORRECTED 2026-11-07: the claim that the Borsh layout was
  * "verified byte-identical to near-api-js's serializer" was WRONG -
  * a real Meteor signature failed verification live. The payload was
