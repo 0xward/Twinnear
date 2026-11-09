@@ -24,9 +24,16 @@
 //! - Gasless meta-transactions (phase 2): a trusted relayer account (set by
 //!   the owner) may create invoices on a seller's behalf via
 //!   `create_invoice_meta`. The seller's NEP-413 ed25519 signature is
-//!   verified ON-CHAIN (M-01) over the canonical message; the contract
+//!   verified ON-CHAIN (M-01) over the canonical message, and the contract
 //!   enforces replay protection with a per-seller nonce and only accepts
-//!   calls from the relayer account.
+//!   calls from the relayer account. TRUST MODEL (B3, honest version):
+//!   the on-chain check only proves that whoever holds the SUPPLIED
+//!   public key signed this exact message — the contract does NOT bind
+//!   that key to the seller's account, so a compromised relayer could
+//!   supply its own keypair and forge an invoice. Meta-transactions
+//!   are therefore only as trustworthy as the relayer itself; binding
+//!   a seller's key on-chain first (`register_meta_key`) is the
+//!   architectural fix and is NOT yet implemented.
 //! - External settlement (phase 2): when a client pays from another chain
 //!   via 1Click/Intents, the funds land directly with the seller (no
 //!   escrow). The seller then closes the invoice on-chain with
@@ -165,8 +172,9 @@ pub struct Invoice {
     /// hash). `None` for plain NEAR escrow payments.
     pub external_ref: Option<String>,
     /// Nanosecond block timestamp by which the seller must release
-    /// (or refund). `None` = no deadline, chosen explicitly by the
-    /// seller at creation (the pay page warns the client about this).
+    /// (or refund). New invoices ALWAYS carry one (B4: `due_days` is
+    /// required at creation so `claim_refund` always has a trigger);
+    /// `None` survives only on invoices created before that rule.
     pub due_date: Option<u64>,
     /// True while the client disputes a paid, unreleased invoice.
     /// While true, `release_invoice` is blocked.
@@ -478,6 +486,20 @@ impl Contract {
     /// blob no longer deserializes as `OldContractV4`: Borsh rejects
     /// the trailing bytes of the appended fields) and leaves the
     /// state untouched.
+    ///
+    /// C4 — UPGRADE WINDOW (no on-chain check is possible): this
+    /// function cannot assert that no transfer/payout is in flight.
+    /// `pending_transfers` is a `LookupMap`, which has no key
+    /// enumeration, and near-sdk 5 exposes no storage prefix scan,
+    /// so "is the map empty" cannot be evaluated on-chain at all.
+    /// The operator MUST therefore migrate only in a quiet window:
+    /// wait until no release/refund/claim call has been made for
+    /// several minutes (transfers settle within 1–2 blocks, and a
+    /// failed step leaves its payout queued for retry — check the
+    /// recent history before upgrading). Migrating mid-transfer
+    /// would strand the in-flight payout's callback state. (On the
+    /// live contract this function is already unreachable: the
+    /// state IS v5, so a second migrate panics by design.)
     #[init(ignore_state)]
     pub fn migrate() -> Self {
         let old: OldContractV4 =
@@ -683,16 +705,23 @@ impl Contract {
         }
 
         let created_at = env::block_timestamp();
-        let due_date = match due_days {
-            None => None,
-            Some(days) => {
-                assert!(
-                    (1..=90).contains(&days),
-                    "due_days must be between 1 and 90, or omitted for no deadline"
-                );
-                Some(created_at.saturating_add(days as u64 * NS_PER_DAY))
-            }
-        };
+        // B4: a deadline is REQUIRED for every new invoice (1–90
+        // days). Without one, `claim_refund` has no trigger, and a
+        // disputed invoice whose seller goes silent locks the escrow
+        // forever — there is no arbiter. Old invoices keep whatever
+        // due date they were created with (possibly none); this
+        // check runs only at creation. The New Invoice form
+        // defaults due_days to 30.
+        let days = due_days.unwrap_or_else(|| {
+            env::panic_str(
+                "due_days is required: every invoice needs a deadline (1-90 days, e.g. 30) so the client can claim a refund if the seller disappears",
+            )
+        });
+        assert!(
+            (1..=90).contains(&days),
+            "due_days must be between 1 and 90, or omitted for no deadline"
+        );
+        let due_date = Some(created_at.saturating_add(days as u64 * NS_PER_DAY));
 
         let id = self.next_invoice_id;
         self.next_invoice_id += 1;
@@ -746,8 +775,10 @@ impl Contract {
     /// Enforces the client's spend-guard policy, if one is set.
     /// Requires a 0.01 NEAR storage deposit (H-06, one-time,
     /// non-refundable — it pays for the permanent ledger entry).
-    /// `due_days`: 1–90 days until the payment deadline, or `None`
-    /// for no deadline (the pay page warns the client about that).
+    /// `due_days`: REQUIRED, 1–90 days until the payment deadline
+    /// (B4 — the New Invoice form defaults to 30). There is no
+    /// longer a "no deadline" option: without a deadline the client
+    /// has no `claim_refund` exit if the seller disappears.
     /// `currency`: `Near` (amount in yoctoNEAR) or `Usdc` (amount in
     /// micro-USDC; USDC invoices settle via 1Click, not escrow — see
     /// `pay_invoice` — and enforce the USDC spend-guard caps
@@ -884,14 +915,23 @@ impl Contract {
     /// Create an invoice on a seller's behalf, submitted by the trusted
     /// relayer (gasless meta-transaction).
     ///
-    /// Trust model: only the relayer account (set by the owner via
-    /// `set_relayer`) may call this. The seller's NEP-413 signature is
-    /// verified ON-CHAIN (M-01) over the canonical message, so even a
-    /// compromised relayer cannot forge invoices for a seller whose key
-    /// it does not hold. Replay protection: `nonce` must be strictly
-    /// greater than the last accepted nonce for this seller.
-    /// `nep413_nonce` is the base64 32-byte NEP-413 nonce from the
-    /// signed payload (NOT the replay counter).
+    /// Trust model (B3, honest version): only the relayer account (set
+    /// by the owner via `set_relayer`) may call this, and the seller's
+    /// NEP-413 signature is verified ON-CHAIN (M-01) over the canonical
+    /// message — but the verification uses the public key SUPPLIED in
+    /// this call, and the contract does NOT check that the key belongs
+    /// to the seller's account. A compromised relayer could therefore
+    /// generate its own keypair, sign any message, and pass its own
+    /// key: the check would pass. So a compromised relayer CAN forge
+    /// invoices — the earlier claim to the contrary was wrong.
+    /// Meta-transactions are only as trustworthy as the relayer.
+    /// The architectural fix — sellers registering their meta-key
+    /// on-chain first (`register_meta_key`), then verifying against
+    /// the registered key — is NOT yet implemented. Replay
+    /// protection: `nonce` must be strictly greater than the last
+    /// accepted nonce for this seller. `nep413_nonce` is the base64
+    /// 32-byte NEP-413 nonce from the signed payload (NOT the replay
+    /// counter).
     ///
     /// v5: `milestones` and `splits` are part of the signed message
     /// (see `verify_meta_signature`), so a relayer cannot attach a
@@ -935,10 +975,10 @@ impl Contract {
             &splits,
         );
         self.meta_nonces.insert(seller.clone(), nonce);
-        env::log_str(&format!(
-            "meta invoice: seller={} nonce={} public_key={} signature={}",
-            seller, nonce, public_key, signature
-        ));
+        // C3: only seller + nonce are logged. The signature and the
+        // public key are transaction arguments (already public), but
+        // they do not belong in the permanent on-chain log.
+        env::log_str(&format!("meta invoice: seller={} nonce={}", seller, nonce));
         self.create_invoice_inner(
             seller,
             client,
@@ -995,12 +1035,16 @@ impl Contract {
 
     /// Confirm an off-chain settlement (e.g. a client paid from another
     /// chain via 1Click/Intents and the funds landed directly with the
-    /// seller). Seller only, invoice must be Pending. `reference` is the
-    /// 1Click deposit address (0x + 40 hex) or origin-chain tx hash
-    /// (0x + 64 hex), recorded on the invoice for audit. The seller
-    /// attests they received the funds; there is no escrow for external
-    /// settlements. This is a unilateral attestation — the UI labels it
-    /// "Paid · external (unverified)" and it is NOT covered by the
+    /// seller). Seller only, invoice must be Pending, and — A6 — the
+    /// invoice MUST be a USDC invoice: external settlement is the
+    /// 1Click path, and a NEAR invoice has no off-chain leg at all,
+    /// so confirming one here would mark it Paid + released with no
+    /// money ever moving. `reference` is the 1Click deposit address
+    /// (0x + 40 hex) or origin-chain tx hash (0x + 64 hex), recorded
+    /// on the invoice for audit. The seller attests they received
+    /// the funds; there is no escrow for external settlements. This
+    /// is a unilateral attestation — the UI labels it "Paid ·
+    /// external (unverified)" and it is NOT covered by the
     /// spend-guard and NOT counted toward the daily cap (M-02/M-03).
     ///
     /// v4: for USDC invoices, the client's USDC spend-guard IS
@@ -1017,6 +1061,15 @@ impl Contract {
             .get(&id)
             .unwrap_or_else(|| env::panic_str("invoice not found"))
             .clone();
+        // A6: only USDC invoices settle externally. A NEAR invoice
+        // confirmed here would become Paid + released with no money
+        // moving — the escrow path (`pay_invoice` /
+        // `release_invoice`) is the only way a NEAR invoice gets paid.
+        assert_eq!(
+            invoice.currency,
+            Currency::Usdc,
+            "only USDC invoices settle externally"
+        );
         assert_eq!(
             caller, invoice.seller,
             "only the seller can confirm external payment"
@@ -1031,11 +1084,8 @@ impl Contract {
             "reference must be a 0x deposit address (42 chars) or tx hash (66 chars)"
         );
         // v4: USDC spend-guard at confirmation time (the on-chain
-        // "payment" event for USDC). NEAR invoices confirmed here
-        // keep the pre-v4 behaviour (attested, no policy re-check).
-        if invoice.currency == Currency::Usdc {
-            self.check_usdc_policy_for_confirmation(&invoice);
-        }
+        // "payment" event for USDC).
+        self.check_usdc_policy_for_confirmation(&invoice);
         invoice.status = InvoiceStatus::Paid;
         invoice.released = true;
         invoice.paid_at = Some(env::block_timestamp());
@@ -1171,7 +1221,13 @@ impl Contract {
         invoice.status = InvoiceStatus::Paid;
         invoice.paid_at = Some(env::block_timestamp());
         self.invoices.insert(id, invoice.clone());
-        self.total_escrowed = self.total_escrowed.saturating_add(invoice.amount.0);
+        // C2: critical funds path — a silent saturating clamp here
+        // would hide an accounting bug and let the H-06 reserve
+        // guard decide from a wrong number. Overflow must panic.
+        self.total_escrowed = self
+            .total_escrowed
+            .checked_add(invoice.amount.0)
+            .expect("total_escrowed overflow");
         self.decrement_open_count(&invoice.seller);
     }
 
@@ -1202,11 +1258,16 @@ impl Contract {
     /// Still-escrowed (unreleased) portion of an invoice: the full
     /// amount minus released milestones. For a plain invoice this is
     /// the full amount.
+    ///
+    /// C2: critical funds path — `checked_sub` so a released total
+    /// that somehow exceeds the invoice amount panics loudly instead
+    /// of silently clamping to 0 and refunding nothing.
     fn unreleased_amount(&self, invoice: &Invoice) -> u128 {
         invoice
             .amount
             .0
-            .saturating_sub(self.released_milestone_total(invoice.id))
+            .checked_sub(self.released_milestone_total(invoice.id))
+            .expect("released milestones exceed invoice amount")
     }
 
     /// True when an invoice has a v5 plan — milestones, splits, or
@@ -1280,6 +1341,28 @@ impl Contract {
             "a transfer for this invoice is already in flight"
         );
         if let Some(payout) = self.pending_payouts.get(&invoice_id).cloned() {
+            // B2: RESUME only when the new call describes EXACTLY
+            // the payout that is already queued — same steps (same
+            // recipients, amounts, and milestone indices), same
+            // total, same direction. Without this check a different
+            // operation silently resumed the old one: a failed
+            // milestone release could be "resumed" by a refund call
+            // (even during a dispute) and the money would keep
+            // flowing to the seller. A mismatched retry panics; the
+            // queued payout must be finished (by retrying the SAME
+            // operation) before any other payout can start.
+            assert_eq!(
+                steps, payout.steps,
+                "a payout for this invoice is already queued — retry the same operation (steps do not match the queued payout)"
+            );
+            assert_eq!(
+                total, payout.total.0,
+                "a payout for this invoice is already queued — retry the same operation (total does not match the queued payout)"
+            );
+            assert_eq!(
+                is_refund, payout.is_refund,
+                "a payout for this invoice is already queued — retry the same operation (a refund cannot resume a release, or vice versa)"
+            );
             let step = payout.steps[payout.next_step as usize].clone();
             self.pending_transfers.insert(invoice_id, !payout.is_refund);
             return Promise::new(step.recipient.clone())
@@ -1362,7 +1445,13 @@ impl Contract {
                 invoice.released = true;
             }
         }
-        self.total_escrowed = self.total_escrowed.saturating_sub(payout.total.0);
+        // C2: critical funds path — underflow here would mean the
+        // payout took more out of escrow than was recorded, and a
+        // silent clamp to 0 would hide it. Panic loudly instead.
+        self.total_escrowed = self
+            .total_escrowed
+            .checked_sub(payout.total.0)
+            .expect("total_escrowed underflow: payout exceeds escrowed total");
         self.invoices.insert(id, invoice);
     }
 
@@ -1626,6 +1715,15 @@ impl Contract {
             !self.pending_transfers.contains_key(&id),
             "a transfer for this invoice is already in flight"
         );
+        // B12: also refuse while a v5 payout is QUEUED for this
+        // invoice. After a failed payout step `pending_transfers`
+        // is cleared but `pending_payouts` is kept for retry — a
+        // dispute opened in that gap could otherwise be bypassed
+        // by retrying the queued payout (see B2).
+        assert!(
+            !self.pending_payouts.contains_key(&id),
+            "a payout for this invoice is already queued"
+        );
         invoice.disputed = true;
         invoice.dispute_reason = Some(reason);
         self.invoices.insert(id, invoice);
@@ -1673,15 +1771,20 @@ impl Contract {
     /// transfer promise succeeds (H-02). If the transfer fails, the
     /// release can simply be retried.
     ///
-    /// v5: for an invoice WITH milestones, `release_invoice` releases
-    /// ALL remaining unreleased milestones at once — every milestone
-    /// that is not yet Released, whatever its state (Pending,
-    /// Submitted, or ChangesRequested), each distributed by the
-    /// splits — and marks the invoice released. For an invoice with
-    /// splits but no milestones, the full amount is distributed by
-    /// the splits. This is the seller's existing whole-invoice
-    /// release right, kept whole: per-milestone client control lives
-    /// in `approve_milestone` / `request_changes` /
+    /// v5: for an invoice WITH milestones, `release_invoice`
+    /// releases ONLY the milestones that are Submitted AND past
+    /// their 14-day inspection window — exactly the `claim_milestone`
+    /// condition (B1). A Pending milestone has no submitted work to
+    /// release, and a ChangesRequested one is waiting on the seller;
+    /// releasing either would bypass the client's per-milestone
+    /// control (`approve_milestone` / `request_changes` /
+    /// `claim_milestone`). Milestones that are not releasable yet
+    /// are left untouched, and the invoice stays unreleased until
+    /// every milestone is Released. For an invoice with splits but
+    /// no milestones, the full amount is distributed by the splits.
+    /// This is the seller's existing whole-invoice release right,
+    /// kept whole for plain invoices; per-milestone client control
+    /// lives in `approve_milestone` / `request_changes` /
     /// `claim_milestone`, and a dispute still blocks this call
     /// entirely. For a plain invoice (no milestones, no splits) the
     /// behaviour is unchanged (one transfer of the full amount to
@@ -1719,8 +1822,25 @@ impl Contract {
             }
             let mut steps: Vec<PayoutStep> = Vec::new();
             let mut total: u128 = 0;
+            let now = env::block_timestamp();
             for (idx, m) in milestones.iter().enumerate() {
                 if m.state == MilestoneState::Released {
+                    continue;
+                }
+                // B1: only a Submitted milestone whose 14-day
+                // inspection window has passed may be released this
+                // way — the same condition as `claim_milestone`. A
+                // Pending milestone has no submitted work, and a
+                // ChangesRequested one is waiting on the seller;
+                // releasing either would bypass the client's
+                // per-milestone control.
+                if m.state != MilestoneState::Submitted {
+                    continue;
+                }
+                let submitted_at = m.submitted_at.unwrap_or_else(|| {
+                    env::panic_str("submitted milestone has no submission time")
+                });
+                if now < submitted_at.saturating_add(MILESTONE_INSPECTION_NS) {
                     continue;
                 }
                 for share in self.split_release(&invoice, m.amount.0) {
@@ -1732,7 +1852,10 @@ impl Contract {
                 }
                 total = total.saturating_add(m.amount.0);
             }
-            assert!(!steps.is_empty(), "all milestones already released");
+            assert!(
+                !steps.is_empty(),
+                "no releasable milestones: only submitted milestones past the 14-day inspection window can be released"
+            );
             return self.start_payout(id, steps, total, false);
         }
         self.start_escrow_transfer(&invoice, true)
@@ -1841,7 +1964,13 @@ impl Contract {
                 } else {
                     invoice.status = InvoiceStatus::Refunded;
                 }
-                self.total_escrowed = self.total_escrowed.saturating_sub(invoice.amount.0);
+                // C2: critical funds path — underflow here would mean
+                // the escrow paid out more than was recorded. Panic
+                // loudly instead of silently clamping to 0.
+                self.total_escrowed = self
+                    .total_escrowed
+                    .checked_sub(invoice.amount.0)
+                    .expect("total_escrowed underflow: release/refund exceeds escrowed total");
                 self.invoices.insert(id, invoice);
             }
             PromiseResult::Failed => {
@@ -1856,13 +1985,21 @@ impl Contract {
 
     /// Rescue escrow whose transfer demonstrably failed (H-02, last
     /// resort). Owner only, only for invoices recorded in
-    /// `failed_transfers`. Sends the escrowed amount to `to` (e.g. a
-    /// fresh account when the original recipient's account was deleted)
-    /// and finalises the invoice the same way the callback would.
-    /// Whole-invoice transfers only: v5 milestone payouts never write
-    /// `failed_transfers` — a failed payout step is retried from its
-    /// persisted payout record (`on_payout_callback`), which a rescue
-    /// could not express.
+    /// `failed_transfers`. Sends the escrowed amount to the ORIGINAL
+    /// recipient only — the seller for a failed release, the client
+    /// for a failed refund (B10: `to` is asserted to equal that
+    /// recipient, so the owner can never redirect stuck funds to an
+    /// arbitrary account). Finalises the invoice the same way the
+    /// callback would. Whole-invoice transfers only: v5 milestone
+    /// payouts never write `failed_transfers` — a failed payout step
+    /// is retried from its persisted payout record
+    /// (`on_payout_callback`), which a rescue could not express.
+    ///
+    /// Trade-off (accepted): if the original recipient's account
+    /// was deleted, rescue can no longer redirect to a fresh
+    /// account — the funds stay stuck until the recipient account
+    /// exists again. That is the price of removing the owner's
+    /// unilateral power to send anyone's escrow anywhere.
     pub fn rescue_escrow(&mut self, id: u64, to: AccountId) -> Promise {
         assert_eq!(
             env::predecessor_account_id(),
@@ -1881,6 +2018,18 @@ impl Contract {
             .clone();
         assert_eq!(invoice.status, InvoiceStatus::Paid, "invoice is not paid");
         assert!(!invoice.released, "funds already released");
+        // B10: the rescue destination is locked to the intended
+        // recipient of the failed transfer — seller for a release,
+        // client for a refund. The owner cannot redirect escrow.
+        let expected = if is_release {
+            invoice.seller.clone()
+        } else {
+            invoice.client.clone()
+        };
+        assert_eq!(
+            to, expected,
+            "rescue must pay the original recipient (seller for a failed release, client for a failed refund)"
+        );
         self.failed_transfers.remove(&id);
         // Finalisation happens in the callback (which reads the
         // direction from `pending_transfers`); record the rescue
@@ -2389,7 +2538,11 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "due_days is required")]
     fn create_invoice_no_deadline() {
+        // B4: there is no longer a "no deadline" option — an invoice
+        // without a deadline leaves the client with no claim_refund
+        // exit if the seller disappears.
         let mut c = setup(alice());
         c.create_invoice(
             bob(),
@@ -2402,7 +2555,6 @@ mod tests {
             vec![],
             vec![],
         );
-        assert_eq!(c.get_invoice(1).unwrap().due_date, None);
     }
 
     #[test]
@@ -2448,7 +2600,7 @@ mod tests {
             bob(),
             U128(1_000),
             "x".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2465,7 +2617,7 @@ mod tests {
             alice(),
             U128(1_000),
             "x".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2495,7 +2647,7 @@ mod tests {
             bob(),
             U128(1_000),
             "too big".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2514,7 +2666,7 @@ mod tests {
             bob(),
             U128(100),
             "not allowed".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2532,7 +2684,7 @@ mod tests {
             bob(),
             U128(100),
             "ok".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2604,7 +2756,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2635,7 +2787,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2647,11 +2799,63 @@ mod tests {
         let _promise = c.release_invoice(1);
         run_callback(&mut c, 1, PromiseResult::Failed);
         // Only the owner can rescue, and only after a recorded failure.
+        // B10: the rescue must go to the ORIGINAL recipient — the
+        // seller for a failed release — never to a third party.
         set_predecessor(contract_acct());
-        let _promise = c.rescue_escrow(1, carol());
+        let _promise = c.rescue_escrow(1, alice());
         run_callback(&mut c, 1, PromiseResult::Successful(vec![]));
         assert!(c.get_invoice(1).unwrap().released);
         assert_eq!(c.get_total_escrowed(), U128(0));
+    }
+
+    #[test]
+    #[should_panic(expected = "rescue must pay the original recipient")]
+    fn rescue_to_third_party_rejected() {
+        // B10: the owner cannot redirect stuck escrow to an arbitrary
+        // account — a failed release rescues to the seller only.
+        let mut c = setup(alice());
+        c.create_invoice(
+            bob(),
+            U128(1_000),
+            "work".to_string(),
+            Some(30),
+            Currency::Near,
+            vec![],
+            0,
+            vec![],
+            vec![],
+        );
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(alice());
+        let _promise = c.release_invoice(1);
+        run_callback(&mut c, 1, PromiseResult::Failed);
+        set_predecessor(contract_acct());
+        let _promise = c.rescue_escrow(1, carol());
+    }
+
+    #[test]
+    #[should_panic(expected = "rescue must pay the original recipient")]
+    fn rescue_refund_to_third_party_rejected() {
+        // B10, refund direction: a failed refund rescues to the
+        // client only.
+        let mut c = setup(alice());
+        c.create_invoice(
+            bob(),
+            U128(1_000),
+            "work".to_string(),
+            Some(30),
+            Currency::Near,
+            vec![],
+            0,
+            vec![],
+            vec![],
+        );
+        pay_invoice_as(&mut c, 1, bob(), 1_000);
+        set_predecessor(alice());
+        let _promise = c.refund_invoice(1);
+        run_callback(&mut c, 1, PromiseResult::Failed);
+        set_predecessor(contract_acct());
+        let _promise = c.rescue_escrow(1, carol());
     }
 
     #[test]
@@ -2662,7 +2866,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2681,7 +2885,7 @@ mod tests {
             bob(),
             U128(1_000),
             "typo".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2701,7 +2905,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2759,7 +2963,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "x".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -2774,7 +2978,7 @@ mod tests {
             bob(),
             U128(1_000),
             "x".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2832,6 +3036,35 @@ mod tests {
         assert!(blocked.is_err());
         // If the transfer FAILS, the dispute opens normally again.
         run_callback(&mut c, 1, PromiseResult::Failed);
+        set_predecessor(bob());
+        c.open_dispute(1, "work not delivered".to_string());
+        assert!(c.get_invoice(1).unwrap().disputed);
+    }
+
+    #[test]
+    fn open_dispute_rejected_while_payout_queued() {
+        // B12: after a v5 payout step fails, `pending_transfers` is
+        // cleared but `pending_payouts` is KEPT for retry. A dispute
+        // opened in that gap must be refused — otherwise the queued
+        // payout could still pay out through a retry (see B2).
+        let mut c = setup(alice());
+        milestone_invoice_paid(&mut c);
+        set_predecessor(alice());
+        c.submit_work(1, 0);
+        set_predecessor(bob());
+        let _p = c.approve_milestone(1, 0);
+        run_payout_callback(&mut c, 1, PromiseResult::Failed);
+        // The in-flight guard is gone, but the payout is still queued.
+        assert!(!c.pending_transfers.contains_key(&1));
+        assert!(c.pending_payouts.contains_key(&1));
+        set_predecessor(bob());
+        let blocked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.open_dispute(1, "work not delivered".to_string());
+        }));
+        assert!(blocked.is_err());
+        // Once the queued payout finishes, the dispute opens normally.
+        let _p = c.approve_milestone(1, 0);
+        assert_eq!(drain_payout(&mut c, 1), 1);
         set_predecessor(bob());
         c.open_dispute(1, "work not delivered".to_string());
         assert!(c.get_invoice(1).unwrap().disputed);
@@ -2906,8 +3139,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "invoice has no due date")]
+    #[should_panic(expected = "due_days is required")]
     fn claim_refund_without_due_date_rejected() {
+        // B4: an invoice without a due date can no longer be created
+        // at all — the old "claim_refund panics on a dateless
+        // invoice" case is now a creation-time rejection, so the
+        // escrow can never be locked by a missing deadline again.
         let mut c = setup(alice());
         c.create_invoice(
             bob(),
@@ -2920,9 +3157,6 @@ mod tests {
             vec![],
             vec![],
         );
-        pay_invoice_as(&mut c, 1, bob(), 1_000);
-        set_predecessor(bob());
-        let _promise = c.claim_refund(1);
     }
 
     #[test]
@@ -2933,7 +3167,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2953,7 +3187,7 @@ mod tests {
             bob(),
             U128(1_000),
             "a".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2964,7 +3198,7 @@ mod tests {
             bob(),
             U128(1_000),
             "b".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -2993,7 +3227,7 @@ mod tests {
             bob(),
             U128(1_000),
             "a".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -3020,7 +3254,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "x".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -3034,7 +3268,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "one too many".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -3049,7 +3283,7 @@ mod tests {
             bob(),
             U128(1_000),
             "fits now".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -3073,7 +3307,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -3096,7 +3330,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -3175,7 +3409,7 @@ mod tests {
             B64.encode(sig.to_bytes()),
             public_key,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -3198,7 +3432,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -3220,7 +3454,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -3235,7 +3469,7 @@ mod tests {
             sig2,
             pk2,
             nonce_b64_2,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -3271,8 +3505,8 @@ mod tests {
             bob(),
             U128(1_000),
             "cross-chain".to_string(),
-            None,
-            Currency::Near,
+            Some(30),
+            Currency::Usdc,
             vec![],
             0,
             vec![],
@@ -3292,6 +3526,28 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "only USDC invoices settle externally")]
+    fn confirm_external_payment_rejects_near_invoice() {
+        // A6: a NEAR invoice confirmed here used to become Paid +
+        // released with no money ever moving. The escrow path
+        // (pay_invoice / release_invoice) is the only way a NEAR
+        // invoice gets paid.
+        let mut c = setup(alice());
+        c.create_invoice(
+            bob(),
+            U128(1_000),
+            "near".to_string(),
+            Some(30),
+            Currency::Near,
+            vec![],
+            0,
+            vec![],
+            vec![],
+        );
+        c.confirm_external_payment(1, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
+    }
+
+    #[test]
     #[should_panic(expected = "reference must be a 0x deposit address")]
     fn confirm_external_payment_rejects_bad_ref() {
         let mut c = setup(alice());
@@ -3299,8 +3555,8 @@ mod tests {
             bob(),
             U128(1_000),
             "x".to_string(),
-            None,
-            Currency::Near,
+            Some(30),
+            Currency::Usdc,
             vec![],
             0,
             vec![],
@@ -3317,8 +3573,8 @@ mod tests {
             bob(),
             U128(1_000),
             "x".to_string(),
-            None,
-            Currency::Near,
+            Some(30),
+            Currency::Usdc,
             vec![],
             0,
             vec![],
@@ -3347,7 +3603,7 @@ mod tests {
             bob(),
             U128(3_850),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             items,
             1000,
@@ -3373,7 +3629,7 @@ mod tests {
             bob(),
             U128(1_048),
             "odd".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![line_item("A", 1, 999)],
             500,
@@ -3394,7 +3650,7 @@ mod tests {
             bob(),
             U128(3_851),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![line_item("Design", 2, 1_000)],
             0,
@@ -3411,7 +3667,7 @@ mod tests {
             bob(),
             U128(1_000),
             "x".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             500,
@@ -3428,7 +3684,7 @@ mod tests {
             bob(),
             U128(1),
             "x".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![line_item("A", 10_000, u128::MAX)],
             0,
@@ -3451,7 +3707,7 @@ mod tests {
             bob(),
             U128(25_000_000),
             "usdc work".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -3470,7 +3726,7 @@ mod tests {
                 bob(),
                 U128(25_000_000),
                 "nope".to_string(),
-                None,
+                Some(30),
                 Currency::Usdc,
                 vec![],
                 0,
@@ -3489,7 +3745,7 @@ mod tests {
             bob(),
             U128(25_000_000),
             "usdc".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -3712,7 +3968,7 @@ mod tests {
             bob(),
             U128(10_000_000_000_000_000_000_000),
             "post-migrate milestones".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -3746,7 +4002,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "post-migrate usdc".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -3829,7 +4085,7 @@ mod tests {
             bob(),
             U128(0),
             "free?".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -3847,7 +4103,7 @@ mod tests {
             bob(),
             U128(100),
             ok,
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -3862,7 +4118,7 @@ mod tests {
                 bob(),
                 U128(100),
                 too_long,
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -3884,7 +4140,7 @@ mod tests {
             bob(),
             U128(2_000),
             "max items".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             items,
             0,
@@ -3906,7 +4162,7 @@ mod tests {
             bob(),
             U128(2_100),
             "too many".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             items,
             0,
@@ -3924,7 +4180,7 @@ mod tests {
             bob(),
             U128(2_000),
             "full tax".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             items,
             10_000,
@@ -3940,7 +4196,7 @@ mod tests {
                 bob(),
                 U128(2_000),
                 "over tax".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 items,
                 10_001,
@@ -3960,7 +4216,7 @@ mod tests {
                 bob(),
                 U128(100),
                 "q0".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![line_item("A", 0, 100)],
                 0,
@@ -3975,7 +4231,7 @@ mod tests {
                 bob(),
                 U128(1_000_100),
                 "q-big".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![line_item("A", 10_001, 100)],
                 0,
@@ -3988,7 +4244,7 @@ mod tests {
             bob(),
             U128(1_000_000),
             "q-max".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![line_item("A", 10_000, 100)],
             0,
@@ -4002,7 +4258,7 @@ mod tests {
                 bob(),
                 U128(100),
                 "p0".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![line_item("A", 1, 0)],
                 0,
@@ -4017,7 +4273,7 @@ mod tests {
                 bob(),
                 U128(100),
                 "d-long".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![line_item(&"x".repeat(201), 1, 100)],
                 0,
@@ -4094,7 +4350,7 @@ mod tests {
             bob(),
             U128(1_000),
             "a".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4105,7 +4361,7 @@ mod tests {
             bob(),
             U128(1_000),
             "b".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4133,7 +4389,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4152,7 +4408,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4170,7 +4426,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4188,7 +4444,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4206,7 +4462,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4231,7 +4487,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4256,7 +4512,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4275,7 +4531,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4296,7 +4552,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4359,7 +4615,7 @@ mod tests {
             bob(),
             U128(1_000),
             "work".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4379,8 +4635,8 @@ mod tests {
             bob(),
             U128(1_000),
             "hash-ref".to_string(),
-            None,
-            Currency::Near,
+            Some(30),
+            Currency::Usdc,
             vec![],
             0,
             vec![],
@@ -4398,8 +4654,8 @@ mod tests {
             bob(),
             U128(1_000),
             "cancelled".to_string(),
-            None,
-            Currency::Near,
+            Some(30),
+            Currency::Usdc,
             vec![],
             0,
             vec![],
@@ -4429,7 +4685,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -4447,7 +4703,7 @@ mod tests {
                 sig,
                 pk,
                 nonce_b64,
-                None,
+                Some(30),
                 vec![],
                 vec![],
             );
@@ -4473,7 +4729,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -4496,7 +4752,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -4522,7 +4778,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![],
             vec![],
         );
@@ -4535,7 +4791,7 @@ mod tests {
             bob(),
             U128(1_000),
             "a".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4546,7 +4802,7 @@ mod tests {
             bob(),
             U128(1_000),
             "b".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4557,7 +4813,7 @@ mod tests {
             bob(),
             U128(1),
             "c".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -4608,7 +4864,7 @@ mod tests {
                 bob(),
                 U128(100),
                 format!("inv {}", i),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -4666,28 +4922,32 @@ mod tests {
             released: bool,
             disputed: bool,
             amount: u128,
+            // A6/B4: the walk mixes NEAR and USDC invoices — only
+            // USDC ones may be confirmed externally, only NEAR ones
+            // may go through escrow (pay/release/refund).
+            usdc: bool,
         }
         let mut model: Vec<Model> = Vec::new();
         let addr_ref = "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string();
         for _ in 0..60 {
             match next_rand(&mut rng) % 8 {
                 0 => {
-                    // Create a NEAR invoice (keep headroom under the
-                    // 50-open cap so the walk never stalls).
+                    // Create an invoice (keep headroom under the
+                    // 50-open cap so the walk never stalls). One in
+                    // four is USDC, so the confirm-external arm has
+                    // something legal to confirm. B4: every invoice
+                    // carries a deadline (Some(14)).
                     if c.get_open_invoice_count(alice()) < 10 {
                         let amount = 1 + next_rand(&mut rng) % 1000;
-                        let due = if next_rand(&mut rng) % 2 == 0 {
-                            Some(14)
-                        } else {
-                            None
-                        };
+                        let usdc = next_rand(&mut rng) % 4 == 0;
+                        let currency = if usdc { Currency::Usdc } else { Currency::Near };
                         set_predecessor(alice());
                         let id = c.create_invoice(
                             bob(),
                             U128(amount as u128),
                             format!("walk {}", model.len()),
-                            due,
-                            Currency::Near,
+                            Some(14),
+                            currency,
                             vec![],
                             0,
                             vec![],
@@ -4699,15 +4959,17 @@ mod tests {
                             released: false,
                             disputed: false,
                             amount: amount as u128,
+                            usdc,
                         });
                     }
                 }
                 1 => {
-                    // Pay a random pending invoice.
+                    // Pay a random pending NEAR invoice (USDC
+                    // invoices never touch escrow).
                     let pend: Vec<usize> = model
                         .iter()
                         .enumerate()
-                        .filter(|(_, m)| m.status == InvoiceStatus::Pending)
+                        .filter(|(_, m)| m.status == InvoiceStatus::Pending && !m.usdc)
                         .map(|(i, _)| i)
                         .collect();
                     if !pend.is_empty() {
@@ -4800,11 +5062,12 @@ mod tests {
                 }
                 _ => {
                     // Confirm external settlement for a random pending
-                    // invoice (NEAR invoices only in this walk).
+                    // USDC invoice (A6: NEAR invoices cannot be
+                    // confirmed externally).
                     let pend: Vec<usize> = model
                         .iter()
                         .enumerate()
-                        .filter(|(_, m)| m.status == InvoiceStatus::Pending)
+                        .filter(|(_, m)| m.status == InvoiceStatus::Pending && m.usdc)
                         .map(|(i, _)| i)
                         .collect();
                     if !pend.is_empty() {
@@ -4871,7 +5134,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "too big usdc".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -4890,7 +5153,7 @@ mod tests {
             bob(),
             U128(5_000_000),
             "at cap".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -4910,7 +5173,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "a".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -4921,7 +5184,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "b".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -4958,7 +5221,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "a".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -4969,7 +5232,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "b".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -4999,7 +5262,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "usdc".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -5044,7 +5307,7 @@ mod tests {
             bob(),
             U128(10_000_000),
             "usdc".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -5070,16 +5333,19 @@ mod tests {
     }
 
     #[test]
-    fn confirm_near_invoice_without_usdc_policy_still_works() {
-        // No regression: a NEAR invoice confirmed externally works
-        // exactly as in v3 when no USDC policy exists at all.
+    #[should_panic(expected = "only USDC invoices settle externally")]
+    fn confirm_near_invoice_rejected_even_without_usdc_policy() {
+        // A6 (was: "confirm_near_invoice_without_usdc_policy_still_
+        // works"): the v3 behaviour this test enshrined — a NEAR
+        // invoice confirmed externally, Paid + released with no money
+        // moving — was the bug. No USDC policy can excuse it.
         let mut c = setup(alice());
         assert_eq!(c.get_usdc_policy(bob()), None);
         c.create_invoice(
             bob(),
             U128(1_000),
             "near".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5087,9 +5353,6 @@ mod tests {
             vec![],
         );
         c.confirm_external_payment(1, "0x67BccC623Fd586FA3fE6D4D2aBcA6ab0bEd1C8de".to_string());
-        let inv = c.get_invoice(1).unwrap();
-        assert_eq!(inv.status, InvoiceStatus::Paid);
-        assert!(inv.released);
     }
 
     #[test]
@@ -5104,7 +5367,7 @@ mod tests {
             bob(),
             U128(25_000_000),
             "big usdc".to_string(),
-            None,
+            Some(30),
             Currency::Usdc,
             vec![],
             0,
@@ -5265,7 +5528,7 @@ mod tests {
             bob(),
             U128(1_000),
             "plain".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5567,18 +5830,109 @@ mod tests {
     }
 
     #[test]
-    fn milestone_release_invoice_releases_all_remaining() {
+    fn milestone_release_invoice_releases_only_submitted_past_window() {
         let mut c = setup(alice());
         milestone_invoice_paid(&mut c);
-        // Only milestone 0 is submitted; milestone 1 is still
-        // Pending. release_invoice releases BOTH at once.
+        // Only milestone 0 is submitted; milestone 1 is still Pending.
         set_predecessor(alice());
         c.submit_work(1, 0);
+        // B1: the 14-day window has not passed yet, so NOTHING is
+        // releasable — release_invoice refuses instead of paying out
+        // unsubmitted work.
+        let early = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.release_invoice(1);
+        }));
+        assert!(early.is_err());
+        assert_eq!(c.get_milestones(1)[0].state, MilestoneState::Submitted);
+        assert_eq!(c.get_total_escrowed(), U128(1_000));
+        // 14 days after submission, only milestone 0 is releasable:
+        // milestone 1 stays Pending and the invoice stays unreleased.
+        set_time(alice(), 14 * ONE_DAY_NS);
         let _p = c.release_invoice(1);
-        assert_eq!(drain_payout(&mut c, 1), 2);
+        assert_eq!(drain_payout(&mut c, 1), 1);
         assert_eq!(c.get_milestones(1)[0].state, MilestoneState::Released);
-        assert_eq!(c.get_milestones(1)[1].state, MilestoneState::Released);
-        assert!(c.get_invoice(1).unwrap().released);
+        assert_eq!(c.get_milestones(1)[1].state, MilestoneState::Pending);
+        assert!(!c.get_invoice(1).unwrap().released);
+        assert_eq!(c.get_total_escrowed(), U128(400));
+        // A ChangesRequested milestone is not releasable either, even
+        // past the window: the client is still waiting on the seller.
+        set_predecessor(alice());
+        c.submit_work(1, 1);
+        set_predecessor(bob());
+        c.request_changes(1, 1, "fix it".to_string());
+        set_time(alice(), 30 * ONE_DAY_NS);
+        let blocked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.release_invoice(1);
+        }));
+        assert!(blocked.is_err());
+        assert_eq!(
+            c.get_milestones(1)[1].state,
+            MilestoneState::ChangesRequested
+        );
+        assert_eq!(c.get_total_escrowed(), U128(400));
+    }
+
+    #[test]
+    fn start_payout_refund_cannot_resume_release() {
+        // B2: a failed milestone-release payout is queued for retry.
+        // A refund call must NOT silently resume it as a release —
+        // it panics, and the queued release can only be retried by
+        // the same release operation.
+        let mut c = setup(alice());
+        milestone_invoice_paid(&mut c);
+        set_predecessor(alice());
+        c.submit_work(1, 0);
+        set_predecessor(bob());
+        let _p = c.approve_milestone(1, 0);
+        run_payout_callback(&mut c, 1, PromiseResult::Failed);
+        assert!(c.pending_payouts.contains_key(&1));
+        // The seller's refund (allowed even during a dispute) must
+        // not resume the release.
+        set_predecessor(alice());
+        let crossed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.refund_invoice(1);
+        }));
+        assert!(crossed.is_err());
+        // Neither must the client's claim_refund after the due date.
+        set_time(bob(), 15 * ONE_DAY_NS);
+        let crossed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.claim_refund(1);
+        }));
+        assert!(crossed.is_err());
+        // Retrying the SAME operation resumes the queued release.
+        set_predecessor(bob());
+        let _p = c.approve_milestone(1, 0);
+        assert_eq!(drain_payout(&mut c, 1), 1);
+        assert_eq!(c.get_milestones(1)[0].state, MilestoneState::Released);
+        assert_eq!(c.get_total_escrowed(), U128(400));
+    }
+
+    #[test]
+    fn start_payout_release_cannot_resume_refund() {
+        // B2, reverse direction: a failed refund payout is queued; a
+        // release call must not resume it (which would mark a
+        // milestone Released and pay the seller instead of refunding
+        // the client).
+        let mut c = setup(alice());
+        milestone_invoice_paid(&mut c);
+        set_predecessor(alice());
+        let _p = c.refund_invoice(1);
+        run_payout_callback(&mut c, 1, PromiseResult::Failed);
+        assert!(c.pending_payouts.contains_key(&1));
+        // Make a release buildable (milestone 0 submitted + window
+        // passed) so the cross-operation call reaches start_payout.
+        set_predecessor(alice());
+        c.submit_work(1, 0);
+        set_time(alice(), 14 * ONE_DAY_NS);
+        let crossed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.release_invoice(1);
+        }));
+        assert!(crossed.is_err());
+        // Retrying the refund resumes the queued refund.
+        set_predecessor(alice());
+        let _p = c.refund_invoice(1);
+        assert_eq!(drain_payout(&mut c, 1), 1);
+        assert_eq!(c.get_invoice(1).unwrap().status, InvoiceStatus::Refunded);
         assert_eq!(c.get_total_escrowed(), U128(0));
     }
 
@@ -5630,7 +5984,7 @@ mod tests {
             bob(),
             U128(1_000),
             "unpaid".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5653,7 +6007,7 @@ mod tests {
                 bob(),
                 U128(600),
                 "six".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -5668,7 +6022,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "sum".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -5683,7 +6037,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "zero".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -5698,7 +6052,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "long".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -5713,7 +6067,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "usdc-m".to_string(),
-                None,
+                Some(30),
                 Currency::Usdc,
                 vec![],
                 0,
@@ -5727,7 +6081,7 @@ mod tests {
                 bob(),
                 U128(1_000),
                 "usdc-s".to_string(),
-                None,
+                Some(30),
                 Currency::Usdc,
                 vec![],
                 0,
@@ -5743,7 +6097,7 @@ mod tests {
             bob(),
             U128(1_000),
             "five".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5762,7 +6116,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "sum".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5779,7 +6133,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "sum".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5796,7 +6150,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "dup".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5813,7 +6167,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "empty".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5833,7 +6187,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "bad".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5854,7 +6208,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "many".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5876,7 +6230,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "zero".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5895,7 +6249,7 @@ mod tests {
                 bob(),
                 U128(3 * ONE_NEAR / 1_000),
                 "tiny".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -5909,7 +6263,7 @@ mod tests {
             bob(),
             U128(4 * ONE_NEAR / 1_000),
             "at-min".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -5925,7 +6279,7 @@ mod tests {
                 bob(),
                 U128(10 * ONE_NEAR),
                 "tiny-ms".to_string(),
-                None,
+                Some(30),
                 Currency::Near,
                 vec![],
                 0,
@@ -6001,7 +6355,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR),
             "splits only".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -6032,7 +6386,7 @@ mod tests {
             bob(),
             U128(10 * ONE_NEAR + 1),
             "odd".to_string(),
-            None,
+            Some(30),
             Currency::Near,
             vec![],
             0,
@@ -6131,7 +6485,7 @@ mod tests {
             sig,
             pk,
             nonce_b64,
-            None,
+            Some(30),
             vec![
                 milestone("part 1", 6 * ONE_NEAR),
                 milestone("part 2", 4 * ONE_NEAR),
@@ -6161,7 +6515,7 @@ mod tests {
                 sig2,
                 pk2,
                 nonce_b64_2,
-                None,
+                Some(30),
                 vec![milestone("part 1", 6 * ONE_NEAR)],
                 vec![],
             );
@@ -6221,7 +6575,7 @@ mod tests {
                                 bob(),
                                 U128(amount as u128),
                                 format!("walk-ms {}", model.len()),
-                                None,
+                                Some(30),
                                 Currency::Near,
                                 vec![],
                                 0,
@@ -6242,7 +6596,7 @@ mod tests {
                                 bob(),
                                 U128(amount as u128),
                                 format!("walk {}", model.len()),
-                                None,
+                                Some(30),
                                 Currency::Near,
                                 vec![],
                                 0,
@@ -6348,19 +6702,34 @@ mod tests {
                 }
                 5 => {
                     // Release a random paid, unreleased, undisputed
-                    // invoice (plain or milestone: all remaining
-                    // milestones at once).
+                    // invoice. B1: for a milestone invoice only the
+                    // Submitted milestones past the 14-day window are
+                    // released — Pending / ChangesRequested ones stay,
+                    // and the invoice stays unreleased until every
+                    // milestone is Released. Plain invoices release
+                    // in full, as before.
                     let rel: Vec<usize> = model
                         .iter()
                         .enumerate()
                         .filter(|(_, m)| {
-                            m.status == InvoiceStatus::Paid && !m.released && !m.disputed
+                            m.status == InvoiceStatus::Paid
+                                && !m.released
+                                && !m.disputed
+                                && (m.milestones.is_empty()
+                                    || m.milestones.iter().any(|s| *s == MState::Submitted))
                         })
                         .map(|(i, _)| i)
                         .collect();
                     if !rel.is_empty() {
                         let i = rel[(next_rand(&mut rng) as usize) % rel.len()];
-                        set_predecessor(alice());
+                        // All submissions happened at t=0; jump past
+                        // the 14-day window so every Submitted
+                        // milestone is releasable.
+                        if !model[i].milestones.is_empty() {
+                            set_time(alice(), 15 * ONE_DAY_NS);
+                        } else {
+                            set_predecessor(alice());
+                        }
                         let _p = c.release_invoice((i + 1) as u64);
                         // Milestone invoices settle via the payout
                         // callback; plain invoices via the legacy one.
@@ -6369,13 +6738,17 @@ mod tests {
                         } else {
                             drain_payout(&mut c, (i + 1) as u64);
                         }
-                        // Legacy plain release leaves no payout record
-                        // (drain is a no-op); milestone release marks
-                        // every milestone Released.
+                        // Only Submitted milestones were released;
+                        // the invoice is released only once every
+                        // milestone is Released.
                         for s in model[i].milestones.iter_mut() {
-                            *s = MState::Released;
+                            if *s == MState::Submitted {
+                                *s = MState::Released;
+                            }
                         }
-                        model[i].released = true;
+                        if model[i].milestones.iter().all(|s| *s == MState::Released) {
+                            model[i].released = true;
+                        }
                     }
                 }
                 6 => {
