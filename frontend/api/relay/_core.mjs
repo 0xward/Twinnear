@@ -36,7 +36,7 @@
  *                             limit - see relayer-server/README.md (H-04).
  *   RELAYER_RATE_LIMIT_PER_HOUR  default 10 relayed invoices per seller (H-04)
  *   RELAYER_CORS_ORIGINS      comma list of allowed browser origins;
- *                             default http://localhost:5173,http://localhost:4173
+ *                             default http://localhost:5173,http://localhost:4173,https://twinnear.vercel.app
  *                             (H-04: no more `Access-Control-Allow-Origin: *`)
  *   RELAYER_MAX_BODY_BYTES    default 65536 (M-07) - standalone server only
  *
@@ -84,7 +84,7 @@ const ALLOWED_SELLERS = (process.env.RELAYER_ALLOWED_SELLERS ?? "")
 const API_KEY = process.env.RELAYER_API_KEY ?? "";
 const RATE_LIMIT_PER_HOUR = Number(process.env.RELAYER_RATE_LIMIT_PER_HOUR ?? 10);
 const CORS_ORIGINS = (process.env.RELAYER_CORS_ORIGINS ??
-  "http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173")
+  "http://localhost:5173,http://localhost:4173,http://127.0.0.1:5173,http://127.0.0.1:4173,https://twinnear.vercel.app")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
