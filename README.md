@@ -23,7 +23,7 @@ Testnet only. No AI.
 - **Contract:** `twinnear.testnet`, schema version 5 (`get_version` returns 5)
   — v5 deployed + migrated on 8 November 2026, 11:52 WIB (redeploy + migrate,
   see `DEPLOY.md`)
-- **Wasm SHA-256 (v5):** `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
+- **Wasm SHA-256 (v5, audit-fix build deployed 9 November 2026, 21:39 WIB):** `420800818f1220fb6b8b04f16fee50eeb51638700f48a50dd87c8fe17ca0726c`
 - **First deployed:** 7 November 2026. **Upgraded to v2:** same day, with
   an owner-only state migration (`migrate`). Invoice #1 survived the
   migration unchanged. **Upgraded to v3:** same day, code-only (NEP-413
@@ -32,12 +32,14 @@ Testnet only. No AI.
   **Upgraded to v4:** 7 November 2026, 22:26 WIB (redeploy + migrate).
   **v5:** funded milestones + programmable splits. **Upgraded to v5:**
   8 November 2026, 11:52 WIB (redeploy + migrate); milestone + split
-  releases proven end-to-end on invoices #5, #7, #9, #10, #12.
+  releases proven end-to-end on invoices #5, #7, #9, #10, #12. Audit-fix
+  rebuild (A6/B1/B2/B3/B4/B10/B12) deployed 9 November 2026, 21:39 WIB,
+  code-only, no migrate (tx 5Z6uuoWRWjKJzEtFnXQpH1HNsKwSDrhBYkfAqCSxBxgD).
 - **Site:** https://twinnear.vercel.app
 - **About:** https://twinnear.vercel.app/#/about
 - **Guides:** https://twinnear.vercel.app/#/docs
 - **Repo:** https://github.com/0xward/Twinnear
-- **Tests:** 123 unit tests pass (`cargo test` in `contract/`)
+- **Tests:** 129 unit tests pass (`cargo test` in `contract/`)
 
 Invoices, retainers, the client portal, PDF export, and the pay flow
 (create, pay into escrow, release) all work against the live contract.
@@ -65,18 +67,18 @@ Each step is "do X, see Y".
      -d '{"jsonrpc":"2.0","id":"t","method":"query","params":{"request_type":"view_code","account_id":"twinnear.testnet","finality":"final"}}' \
      | python3 -c "import json,sys,base64,hashlib; d=json.load(sys.stdin); print(hashlib.sha256(base64.b64decode(d['result']['code_base64'])).hexdigest())"
    ```
-   See: `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
+   See: `420800818f1220fb6b8b04f16fee50eeb51638700f48a50dd87c8fe17ca0726c`
    That is the SHA-256 of the v5 build (funded milestones + programmable
-   splits, 269,450 bytes). The wasm file itself is in the repo at
-   `contract/twinnear.wasm` (force-added, not gitignored) — 269,450
-   bytes, SHA-256 `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`,
+   splits + audit fixes, 272,817 bytes). The wasm file itself is in the repo at
+   `contract/twinnear.wasm` (force-added, not gitignored) — 272,817
+   bytes, SHA-256 `420800818f1220fb6b8b04f16fee50eeb51638700f48a50dd87c8fe17ca0726c`,
    matching the code on chain; the source it was built from is in
    `contract/src/lib.rs`. The compiled wasm in `contract/target/` is
    a stale debug build with a different hash; do not use it for
    verification.
 4. Run the tests.
    Do: `cd contract && cargo test`
-   See: 123 passed, 0 failed.
+   See: 129 passed, 0 failed.
    Do: `cd frontend && npm install && npm run build`
    See: a clean build.
 
@@ -235,7 +237,7 @@ troubleshooting): **[DEPLOY.md](DEPLOY.md)**.
   owner-only `migrate` for upgrades. Tested from Termux (proot-distro
   Ubuntu, aarch64 binary) on 2026-11-07.
 
-> Storage: the optimized 269 KB wasm locks about 2.7 NEAR of storage
+> Storage: the optimized 273 KB wasm locks about 2.7 NEAR of storage
 > stake on the account (1 NEAR per 100 KB). Fund the deployer account
 > from the testnet faucet first: https://near-faucet.io
 
@@ -281,7 +283,7 @@ turned 10 USDC on Base into 9.99436 USDC on NEAR, so cross-chain USDC
 settlement works on mainnet as designed.
 
 Deploying the contract to mainnet costs an estimated 3.1 NEAR: about
-2.7 NEAR of storage stake for the 269 KB wasm, plus account creation
+2.7 NEAR of storage stake for the 273 KB wasm, plus account creation
 and gas. This is an estimate, not a fixed price. The deploy path is
 the same CLI path documented in [DEPLOY.md](DEPLOY.md), with the
 testnet network config replaced by mainnet. No testnet/mainnet toggle
