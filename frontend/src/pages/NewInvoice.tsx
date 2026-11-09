@@ -54,7 +54,7 @@ import AccountNameField from "../components/AccountNameField";
 import CurrencyIcon from "../components/CurrencyIcon";
 import Reveal from "../components/Reveal";
 
-type DueChoice = "7" | "14" | "30" | "none";
+type DueChoice = "7" | "14" | "30";
 
 const EMPTY_ROW: LineItemDraft = {
   description: "",
@@ -68,7 +68,7 @@ export default function NewInvoice() {
   const [currency, setCurrency] = useState<Currency>("Near");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [dueChoice, setDueChoice] = useState<DueChoice>("14");
+  const [dueChoice, setDueChoice] = useState<DueChoice>("30");
   const [gasless, setGasless] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,8 +190,10 @@ export default function NewInvoice() {
       .catch(() => {});
   }, []);
 
-  function dueDays(): number | null {
-    return dueChoice === "none" ? null : Number(dueChoice);
+  /** A due date is required: the contract rejects invoices without
+   *  one, so the escrow always has a claim-refund escape. */
+  function dueDays(): number {
+    return Number(dueChoice);
   }
 
   /** Record a successful creation: show tx hash + explorer link and
@@ -843,18 +845,16 @@ export default function NewInvoice() {
           id="dueDays"
           value={dueChoice}
           onChange={(e) => setDueChoice(e.target.value as DueChoice)}
+          required
         >
           <option value="7">7 days</option>
-          <option value="14">14 days (recommended)</option>
-          <option value="30">30 days</option>
-          <option value="none">No deadline</option>
+          <option value="14">14 days</option>
+          <option value="30">30 days (default)</option>
         </select>
-        {dueChoice === "none" && (
-          <p className="muted" style={{ marginTop: 6 }}>
-            Warning: without a deadline the client has no way to claim a
-            refund if you go silent. Prefer 14 days.
-          </p>
-        )}
+        <p className="muted" style={{ marginTop: 6 }}>
+          Required. After the due date passes, the client can claim a
+          refund — so the escrow can never lock up with no way out.
+        </p>
         <p className="muted" style={{ marginTop: 12 }}>
           Creating this invoice locks a {STORAGE_DEPOSIT_NEAR} NEAR storage
           deposit. One-time, non-refundable. It pays for the ledger entry.
@@ -969,9 +969,7 @@ export default function NewInvoice() {
             {currency === "Usdc"
               ? "payable via 1Click on mainnet; on testnet, confirmed as an external payment."
               : "payable by NEAR or, on mainnet, from another chain via 1Click."}
-            {dueChoice === "none"
-              ? " · No payment deadline."
-              : ` · Due in ${dueChoice} days.`}
+            {` · Due in ${dueChoice} days.`}
           </p>
           {computedTotalSmallest !== null && (
             <p className="preview-meta">
