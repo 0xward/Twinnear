@@ -65,9 +65,9 @@ Each step is "do X, see Y".
      -d '{"jsonrpc":"2.0","id":"t","method":"query","params":{"request_type":"view_code","account_id":"twinnear.testnet","finality":"final"}}' \
      | python3 -c "import json,sys,base64,hashlib; d=json.load(sys.stdin); print(hashlib.sha256(base64.b64decode(d['result']['code_base64'])).hexdigest())"
    ```
-   See: `3c1aa19e48f430be40210970961bc8e57159336bb540587ac8c9c19aced82c57`
-   That is the SHA-256 of the v4 build (USDC spend-guard caps,
-   224,493 bytes). The wasm file itself is not in the repo
+   See: `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
+   That is the SHA-256 of the v5 build (funded milestones + programmable
+   splits, 269,450 bytes). The wasm file itself is not in the repo
    (it is gitignored); the source it was built from is in
    `contract/src/lib.rs`. The compiled wasm in `contract/target/` is
    a stale debug build with a different hash; do not use it for
@@ -233,7 +233,7 @@ troubleshooting): **[DEPLOY.md](DEPLOY.md)**.
   owner-only `migrate` for upgrades. Tested from Termux (proot-distro
   Ubuntu, aarch64 binary) on 2026-11-07.
 
-> Storage: the optimized 213 KB wasm locks about 2.1 NEAR of storage
+> Storage: the optimized 269 KB wasm locks about 2.7 NEAR of storage
 > stake on the account (1 NEAR per 100 KB). Fund the deployer account
 > from the testnet faucet first: https://near-faucet.io
 
@@ -278,8 +278,8 @@ Switching networks is a config change, not a contract change:
 turned 10 USDC on Base into 9.99436 USDC on NEAR, so cross-chain USDC
 settlement works on mainnet as designed.
 
-Deploying the contract to mainnet costs an estimated 2.5 NEAR: about
-2.1 NEAR of storage stake for the 213 KB wasm, plus account creation
+Deploying the contract to mainnet costs an estimated 3.1 NEAR: about
+2.7 NEAR of storage stake for the 269 KB wasm, plus account creation
 and gas. This is an estimate, not a fixed price. The deploy path is
 the same CLI path documented in [DEPLOY.md](DEPLOY.md), with the
 testnet network config replaced by mainnet. No testnet/mainnet toggle
