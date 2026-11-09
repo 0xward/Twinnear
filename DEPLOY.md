@@ -4,12 +4,12 @@ Target account: **`twinnear.testnet`** (created in Meteor Wallet, funded
 with 4 NEAR from the faucet — 0.2 NEAR is the storage reserve, ~3.8 NEAR
 usable).
 
-Contract status: **v5 LIVE** since 2026-11-08 11:52 WIB (deployed via
-Termux + near-cli-rs, redeploy + migrate, wasm 269,450 bytes, SHA-256
-`36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`,
-123 unit tests pass). Upgrades are **redeploy + migrate** — see
-"Redeploy + migrate (v5)" below. Never call `new` again after the
-first deploy.
+Contract status: **v5 LIVE** since 2026-11-08 11:52 WIB; audit-fix
+rebuild deployed 2026-11-09 21:39 WIB (Termux + near-cli-rs, code-only,
+no migrate, tx 5Z6uuoWRWjKJzEtFnXQpH1HNsKwSDrhBYkfAqCSxBxgD), wasm 272,817 bytes, SHA-256 `420800818f1220fb6b8b04f16fee50eeb51638700f48a50dd87c8fe17ca0726c`,
+129 unit tests pass. Upgrades are **redeploy + migrate** when the schema
+changes — see "Redeploy + migrate (v5)" below. Never call `new` again
+after the first deploy.
 
 ## Version history
 
@@ -244,14 +244,15 @@ Same shape as the v4 upgrade: v5 adds two new maps (`milestones`,
 (proot-distro Ubuntu, near-cli-rs 0.31.1, `sign-with-legacy-keychain`):
 
 ```bash
-# 0. Download the v5 wasm and CHECK the SHA before deploying.
+# 0. Download the current wasm and CHECK the SHA before deploying.
 curl -sL -o twinnear.wasm \
   https://raw.githubusercontent.com/0xward/Twinnear/main/contract/twinnear.wasm
 sha256sum twinnear.wasm
-# → 36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0
-#    (269,450 bytes). If the hash differs, STOP — do not deploy.
+# → 420800818f1220fb6b8b04f16fee50eeb51638700f48a50dd87c8fe17ca0726c (current build, audit-fix rebuild 2026-11-09,
+#    272,817 bytes). The 8 Nov v5 deploy used 36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0 (269,450 bytes).
+#    If the hash differs from the current build, STOP — do not deploy.
 
-# 1. Deploy the v5 wasm WITHOUT init.
+# 1. Deploy the current wasm WITHOUT init.
 near contract deploy twinnear.testnet use-file twinnear.wasm without-init-call network-config testnet sign-with-legacy-keychain send
 
 # 2. Migrate the state v4 → v5 (owner only, one tx). REQUIRED for v5
@@ -280,17 +281,17 @@ near contract call-function as-read-only twinnear.testnet get_splits json-args '
 #    and walk one milestone through submit → approve on chain.
 ```
 
-Current build (v5, 2026-11-08, funded milestones + programmable splits,
-optimized):
-- Size: **269,450 bytes**
-- SHA-256: `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
-- 123/123 unit tests pass (`cargo test` in `contract/`)
+Current build (v5 + audit fixes, 2026-11-09, code-only rebuild,
+no migrate):
+- Size: **272,817 bytes**
+- SHA-256: `420800818f1220fb6b8b04f16fee50eeb51638700f48a50dd87c8fe17ca0726c`
+- 129/129 unit tests pass (`cargo test` in `contract/`)
 
-`EXPECTED_WASM_SHA256` in `frontend/src/lib/config.ts` is the v5 hash
+`EXPECTED_WASM_SHA256` in `frontend/src/lib/config.ts` is the hash
 above. After any future contract build, update it to the new wasm's
 SHA-256 (never guess it) and re-verify against the on-chain code.
 
-> Storage: a ~269 KB wasm locks ~2.7 NEAR of storage stake on
+> Storage: a ~273 KB wasm locks ~2.7 NEAR of storage stake on
 > the account (1 NEAR per 100 KB). With 4 NEAR in the account, about
 > 1.3 NEAR stays liquid after deploy — keep demo invoices small
 > (0.05–0.1 NEAR) and top the account up from the faucet again if it
