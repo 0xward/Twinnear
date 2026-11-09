@@ -13,7 +13,7 @@ Ready to paste into the README. No wallet, no signup, no install
 
 2. Check the contract is live on testnet.
    Do: open https://testnet.nearblocks.io/accounts/twinnear.testnet
-   See: the contract account, schema v2, and the recent
+   See: the contract account, schema v5, and the recent
    transactions. The contract holds no funds of its own; escrowed
    funds sit in the contract only while an invoice is unpaid.
 
@@ -24,15 +24,15 @@ Ready to paste into the README. No wallet, no signup, no install
      -d '{"jsonrpc":"2.0","id":"t","method":"query","params":{"request_type":"view_code","account_id":"twinnear.testnet","finality":"final"}}' \
      | python3 -c "import json,sys,base64,hashlib; d=json.load(sys.stdin); print(hashlib.sha256(base64.b64decode(d['result']['code_base64'])).hexdigest())"
    ```
-   See: `dbd630d0c3ce6cf2b5afacf2b9d1f6b2be3fe2760f2d6eac2b452be3bb5d49a0`
-   That is the SHA-256 of the v2 build (USDC, line items and tax,
-   migrate; 213,007 bytes). The wasm file itself is not in the repo
-   (it is gitignored); the source it was built from is in
-   `contract/src/lib.rs`.
+   See: `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
+   That is the SHA-256 of the v5 build (funded milestones +
+   programmable splits, 269,450 bytes). The wasm file itself is in
+   the repo at `contract/twinnear.wasm` (force-added, not gitignored);
+   the source it was built from is in `contract/src/lib.rs`.
 
 4. Run the tests.
    Do: `cd contract && cargo test`
-   See: 50 passed, 0 failed.
+   See: 123 passed, 0 failed.
    Do: `cd frontend && npm install && npm run build`
    See: a clean build.
 
@@ -40,11 +40,11 @@ Ready to paste into the README. No wallet, no signup, no install
 
 Notes for the person pasting this into the README:
 
-- All four steps were run fresh on 7 Nov 2026: the public invoice
-  page reads invoice #1 from the contract, the explorer account
-  is live, the RPC hash above matches the local
+- All four steps were updated 9 Nov 2026 to the live v5 contract:
+  the public invoice page reads invoice #1 from the contract, the
+  explorer account is live, the RPC hash above matches the local
   `contract/twinnear.wasm` and `EXPECTED_WASM_SHA256` in
-  `frontend/src/lib/config.ts`, and `cargo test` passes 90/90.
+  `frontend/src/lib/config.ts`, and `cargo test` passes 123/123.
 - The public invoice page is `/#/invoice/1` (route `/invoice/:id`,
   page `frontend/src/pages/PublicInvoice.tsx`). It uses only the
   `get_invoice` view call and never opens a wallet.
