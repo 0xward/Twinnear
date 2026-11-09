@@ -209,15 +209,15 @@ export default function About() {
             </a>
           </dd>
           <dt>Schema</dt>
-          <dd>Version 4</dd>
+          <dd>Version 5</dd>
           <dt>Wasm SHA-256</dt>
           <dd className="mono" style={{ wordBreak: "break-all" }}>
             {EXPECTED_WASM_SHA256}
           </dd>
           <dt>First deployed</dt>
-          <dd>7 November 2026, upgraded to v4 the same day</dd>
+          <dd>7 November 2026, upgraded to v5 on 8 November 2026, 11:52 WIB</dd>
           <dt>Tests</dt>
-          <dd>90 unit tests pass</dd>
+          <dd>123 unit tests pass</dd>
           <dt>Network</dt>
           <dd>NEAR testnet only</dd>
         </dl>
@@ -273,12 +273,16 @@ export default function About() {
           </li>
           <li>
             <strong>The relayer is trusted for gasless creation.</strong>{" "}
-            It checks signatures off chain. The contract checks them on
-            chain too, so a compromised relayer cannot forge a
-            seller&apos;s invoice, but it can refuse service.
+            It checks signatures off chain, and the contract checks
+            them on chain too — but that check only proves the
+            signature is valid and the nonce is fresh. It does not
+            prove the signing key belongs to the seller, so a
+            compromised relayer could forge an invoice in a
+            seller&apos;s name. The relayer is fully trusted for
+            invoice creation, and it can also refuse service.
           </li>
           <li>
-            <strong>No formal audit.</strong> The contract has 90 unit
+            <strong>No formal audit.</strong> The contract has 123 unit
             tests and a QA review, but no third-party audit.
           </li>
           <li>
