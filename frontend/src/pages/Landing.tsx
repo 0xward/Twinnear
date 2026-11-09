@@ -33,7 +33,7 @@ const FEATURES: { title: string; body: string; wm: WatermarkIcon }[] = [
   },
   {
     title: "Gasless creation",
-    body: "A single-line NEAR invoice costs the seller no gas. Sign a message in your wallet and a relayer submits it.",
+    body: "For single-line NEAR invoices without tax, creation costs the seller no gas. Sign a message in your wallet and a relayer submits it.",
     wm: "gas",
   },
   {
@@ -316,7 +316,7 @@ export default function Landing() {
                     <strong>Twinnear</strong>
                   </td>
                   <td>Minutes</td>
-                  <td>Yes, on chain</td>
+                  <td>Yes, on chain (NEAR only)</td>
                   <td>Dispute, refund, or claim it back</td>
                 </tr>
               </tbody>
@@ -333,7 +333,7 @@ export default function Landing() {
           </h2>
           <p className="section-sub">
             A payment link moves money. Twinnear holds it, records it,
-            and gives it a way out. Four things the demo proves, and one
+            and gives it a way out. Five things the demo proves, and one
             honest limit.
           </p>
           <div className="proof-list">
@@ -363,9 +363,19 @@ export default function Landing() {
               </p>
             </div>
             <div className="stagger-item">
+              <h3>Funded milestones, shared releases.</h3>
+              <p>
+                Up to 5 milestones per invoice, funded up front and
+                released as each part of the work is done — and every
+                release split across up to 3 people, totalling exactly
+                10000 bps. Proven on chain in{" "}
+                <Link to="/invoice/12">invoice #12, split 90/10</Link>.
+              </p>
+            </div>
+            <div className="stagger-item">
               <h3>Tested like it holds real money.</h3>
               <p>
-                90 unit tests pass, including adversarial tests and a
+                123 unit tests pass, including adversarial tests and a
                 60-action random walk. No formal audit yet, and the docs
                 say so plainly.
               </p>
