@@ -21,8 +21,8 @@ Testnet only. No AI.
 ## Live status
 
 - **Contract:** `twinnear.testnet`, schema version 5 (`get_version` returns 5)
-  — v5 code is ready and pushed; the on-chain contract is still v4 until
-  the owner runs the redeploy + migrate in `DEPLOY.md`
+  — v5 deployed + migrated on 8 November 2026, 11:52 WIB (redeploy + migrate,
+  see `DEPLOY.md`)
 - **Wasm SHA-256 (v5):** `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
 - **First deployed:** 7 November 2026. **Upgraded to v2:** same day, with
   an owner-only state migration (`migrate`). Invoice #1 survived the
@@ -30,8 +30,9 @@ Testnet only. No AI.
   verification fix, no migrate). **v4:** USDC spend-guard caps +
   39 adversarial/conformance tests (redeploy + migrate, see `DEPLOY.md`).
   **Upgraded to v4:** 7 November 2026, 22:26 WIB (redeploy + migrate).
-  **v5:** funded milestones + programmable splits (redeploy + migrate,
-  see `DEPLOY.md`).
+  **v5:** funded milestones + programmable splits. **Upgraded to v5:**
+  8 November 2026, 11:52 WIB (redeploy + migrate); milestone + split
+  releases proven end-to-end on invoices #5, #7, #9, #10, #12.
 - **Site:** https://twinnear.vercel.app
 - **About:** https://twinnear.vercel.app/#/about
 - **Guides:** https://twinnear.vercel.app/#/docs
@@ -54,7 +55,7 @@ Each step is "do X, see Y".
    transactions (create, pay, release) linked to the explorer.
 2. Check the contract is live on testnet.
    Do: open https://testnet.nearblocks.io/accounts/twinnear.testnet
-   See: the contract account, schema v4, and the recent
+   See: the contract account, schema v5, and the recent
    transactions. The contract holds no funds of its own; escrowed
    funds sit in the contract only while an invoice is unpaid.
 3. Check the deployed code matches the source.
@@ -215,8 +216,8 @@ Then do this, and see this:
 | As the seller, click "Release to me" | Status becomes **Paid, released**, and the Ledger total "Received" increases by 0.5 Ⓝ |
 | Click "Export CSV" on the Ledger page | A `twinnear-invoices-YYYY-MM-DD.csv` download with all rows |
 
-The live contract is `twinnear.testnet` (schema v4; v5 code is ready,
-see "Live status" above). To redeploy
+The live contract is `twinnear.testnet` (schema v5, deployed + migrated
+8 November 2026, 11:52 WIB; see "Live status" above). To redeploy
 after a contract change, see
 [Deploy the contract](#deploy-the-contract). Redeploy without init,
 then run the owner-only `migrate`.
@@ -297,8 +298,8 @@ account (a 64-character hex address) is enough for the payout address.
 | `create_invoice(client, amount, description, due_days, currency, items, tax_rate_bps, milestones, splits)` | call, payable | Caller is the seller. Enforces the client policy. Requires a 0.01 NEAR storage deposit. `due_days` 1 to 90, or null. `currency` Near or Usdc. Up to 20 line items. Tax 0 to 100%. A single-line invoice must have tax 0 and subtotal equal to amount. `milestones` (v5, NEAR only): up to 5 parts, amounts summing exactly to `amount`. `splits` (v5, NEAR only): up to 3 recipients, shares summing to exactly 10000 bps. |
 | `submit_work(invoice_id, milestone_index)` / `approve_milestone(invoice_id, milestone_index)` / `request_changes(invoice_id, milestone_index, reason)` / `claim_milestone(invoice_id, milestone_index)` | call | v5 milestone lifecycle. Seller submits work; client approves (releases the part at once, split by the invoice splits) or asks for changes with a reason (max 200 bytes); seller claims a submitted part after the 14-day window. Approvals and claims are blocked while disputed. |
 | `get_milestones(invoice_id)` / `get_splits(invoice_id)` | view | v5. The milestone plan and the split recipients of an invoice. Empty = plain invoice (no milestones) / 100% to the seller (no splits). |
-| `migrate()` | call | Owner only. Upgrades stored state to the current schema. Ran successfully for v2 and v4 on 2026-11-07; the v5 migration (v4 to v5) is pending the owner's Termux run. |
-| `get_version()` | view | Current schema version (5 in code; 4 on chain until the v5 deploy + migrate). |
+| `migrate()` | call | Owner only. Upgrades stored state to the current schema. Ran successfully for v2 and v4 on 2026-11-07, and for v5 (v4 to v5) on 2026-11-08, 11:52 WIB. |
+| `get_version()` | view | Current schema version (5 in code and on chain since the v5 deploy + migrate on 2026-11-08). |
 | `create_invoice_meta(seller, client, amount, description, nonce, signature, public_key, nep413_nonce, due_days, milestones, splits)` | call | Relayer only. Gasless invoice creation, nonce replay protection, NEP-413 signature checked on chain. Single-line NEAR invoices only. v5: the signed message covers the milestones + splits JSON. |
 | `set_relayer(relayer)` | call | Owner only. Sets or clears the trusted relayer. |
 | `propose_owner(new_owner)` / `accept_owner()` | call | Two-step owner transfer. |
