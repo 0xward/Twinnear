@@ -67,8 +67,10 @@ Each step is "do X, see Y".
    ```
    See: `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`
    That is the SHA-256 of the v5 build (funded milestones + programmable
-   splits, 269,450 bytes). The wasm file itself is not in the repo
-   (it is gitignored); the source it was built from is in
+   splits, 269,450 bytes). The wasm file itself is in the repo at
+   `contract/twinnear.wasm` (force-added, not gitignored) — 269,450
+   bytes, SHA-256 `36c387190a5fe7c7a57090bd0ae005623530ace91c33599eb0f89a594132d4e0`,
+   matching the code on chain; the source it was built from is in
    `contract/src/lib.rs`. The compiled wasm in `contract/target/` is
    a stale debug build with a different hash; do not use it for
    verification.
@@ -358,6 +360,13 @@ twinnear/
 - No AI libraries, models, or API keys. The only AI ever involved was
   TwinPayAI's Groq decision engine, which was removed (see Disclosure).
 
+## Credits
+
+- Built on the Vite + React template, with
+  [near-api-js](https://github.com/near/near-api-js) and the
+  [NEAR Wallet Selector](https://github.com/near/wallet-selector).
+- Developed with the help of Muse, an AI coding agent.
+
 ## Disclosure
 
 Twinnear is a **port of TwinPayAI** (an agentic-payments project on
@@ -388,11 +397,16 @@ this build. This build is payments only.
   compromised relayer cannot forge a seller's invoice, but it can
   refuse service. Without a relayer, gasless creation is unavailable
   and the direct path is used instead.
-- **Relayer Borsh layout verification is pending.** The phase-2 notes
-  report the server's NEP-413 Borsh layout as byte-identical to
-  near-api-js's serializer, but no verification artifact is in this
-  repo. Final confirmation against a real Meteor signature is still
-  open.
+- **Relayer Borsh layout corrected 2026-11-07.** The phase-2 claim
+  that the server's NEP-413 Borsh layout was byte-identical to
+  near-api-js's serializer was wrong: a real Meteor signature failed
+  live verification because the payload was missing the hardcoded
+  u32 tag 2147484061 and the signature is over SHA-256 of the
+  payload, not the raw bytes. Both the relayer
+  (`frontend/api/relay/_core.mjs`) and the contract's
+  `verify_meta_signature` were fixed the same day; the contract DOES
+  depend on this layout, so the two must stay in sync. Gasless
+  creation has worked end to end since the fix.
 - **WalletConnect is installed and appears in the connect modal.**
   Meteor is the verified login path; Intear is also available in the
   modal.
